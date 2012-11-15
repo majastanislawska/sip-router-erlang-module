@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding='ISO-8859-1'?>
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.4//EN"
+"http://www.oasis-open.org/docbook/xml/4.4/docbookx.dtd" [
+
+<!-- Include general documentation entities -->
+<!ENTITY % docentities SYSTEM "../../../docbook/entities.xml">
+%docentities;
+
+]>
+<!-- Module User's Guide -->
+
+<chapter>
+
+    <title>&adminguide;</title>
+
+    <section>
+        <title>Overview</title>
+        <para>
+            This module provides conectivity and data exchange with Distributed Erlang..
+        </para>
+        <!-- this fragment taken from jsonrpc-c module docs -->
+        <para>
+            This module uses t_suspend() and t_continue() from the TM module.
+        </para>
+        <para>
+            Note that after invoking an asyncronous operation, the processing
+            will continue later, in another application process. Therefore, do not
+            rely on variables stored in private memory, use shared memory if you
+            want to get values after the processing is resumend (e.g., $shv(...)
+            or htable $sht(...)).
+        </para>
+    </section>
+
+    <section>
+        <title>Dependencies</title>
+        <section>
+            <title>&kamailio; Modules</title>
+            <para>
+                The following modules must be loaded before this module:
+                <itemizedlist>
+                    <listitem>
+                        <para>
+                            <emphasis>tm</emphasis> - transaction management.
+                        </para>
+                    </listitem>
+                </itemizedlist>
+            </para>
+        </section>
+        <section>
+            <title>External Libraries or Applications</title>
+            <para>
+                The following libraries or applications must be installed before running
+                &kamailio; with this module loaded:
+                <itemizedlist>
+                    <listitem>
+                        <para>
+                            <emphasis>epmd</emphasis> - Erlang Port Mapper daemon. ??
+                        </para>
+                    </listitem>
+                </itemizedlist>
+            </para>
+        </section>
+    </section>
+    <section>
+        <title>Exported Parameters</title>
+        <section>
+            <title><varname>connect</varname> (string)</title>
+            <para>
+                Set of information required to connect to remote node.
+                This is a list of semicolon separated AVP's.
+                <itemizedlist>
+                    <listitem><para>name - name for connection, this is used in functions to determine where mesage should be passed</para></listitem>
+                    <listitem><para>cookie - authorization cookie. Must be the same as in remote node</para></listitem>
+                    <listitem><para>node - address of remote node </para></listitem>
+                </itemizedlist>
+            </para>
+            <example>
+                <title>Set <varname>connect</varname> parameter</title>
+                <programlisting format="linespecific">
+...
+modparam("erlang","connect","name=con1;cookie=cookie;node=test@localhost")
+...
+                </programlisting>
+            </example>
+        </section>
+    </section>
+    <section>
+        <title>Exported Functions</title>
+        <section>
+            <title>
+                <function moreinfo="none">erlang_cast(node_name, reg_proc, term)</function>
+            </title>
+            <para>
+                Sends as message to registered process on remote node. Does not expect anything to be sent back.
+                Function returns false only when node_name is invalid, term does not contain valid PVs 
+                or after PV expansion does not form a valid erlang term.
+                Script continues within same worker process while actual sending is done asynchronously in another process.
+            </para>
+            <para>
+                node_name should match a name attribute in one of connect parameters
+            </para>
+            <para>
+                reg_proc is a name of registered process running on remote node
+            </para>
+            <para>
+                term is a string containing expression to be sent. It may contain pseudo-variables 
+                which will be expanded before conversion to Erlang Binary Format.
+            </para>
+            <example>
+                <title><function>erlang_cast</function> usage</title>
+                <programlisting format="linespecific">
+...
+erlang_cast("con1","console","\"ok\"");
+erlang_cast("con1","console","{\"$mb\",\"$rb\"}");
+erlang_cast("con1","console","{$pp,\"$pr\"}");
+erlang_cast("con1","console","{\"$timef(%m/%d/%y)\",[{method,'$rm'},{'r-uri',\"$ru\"}]}");
+...
+                </programlisting>
+            </example>
+        </section>
+        <section>
+            <title>
+                <function moreinfo="none">erlang_rex(node_name, mod, fun, args, return_route, result)</function>
+            </title>
+            <para>
+                Makes a request to Erlang rex server, using the standard Erlang RPC facility.
+                Usage is analogous to erl_call command line tool.
+                Function returns false when node_name, return_route is invalid result is not valid variable,
+                or when args or PV expansion of args does not form a valid erlang term (it is not checked if it is actually a list).
+                On success execution of script is suspended, and upon receiving reply SIP processing resumes in return_route.
+            </para>
+            <para>
+                Since the SIP request handling is resumed in another process,
+                the config file execution is lost. As mentioned above, only
+                shared variables ($shv, etc) should be used for any value that
+                will be needed when the script is resumed.
+            </para>
+            <para>
+                node_name should match a name attribute in one of connect parameters
+            </para>
+            <para>
+                mod fun args - Function to be executed on remote node.
+                args should be a valid erlang list [arg1,arg2,arg3], Pseudo-variables can be used.
+                If function does not take any arguments an empty list "[]" should be passed.
+            </para>
+            <para>
+                return_route name of route in which processing of SIP message will resume after receiving reply from erlang.
+            </para>
+            <example>
+                <title><function>erlang_rex</function> usage</title>
+                <programlisting format="linespecific">
+...
+erlang_rex("con1", "erlang", "time", "[]", "ERL_REPL", "$var(result)");
+erlang_rex("con1", "mymodule", "myfunc", "[\"$au\",\"$ad\"]", 
+		"ERL_REPL", "$var(pwd)");
+...
+                </programlisting>
+            </example>
+        </section>
+    </section>
+</chapter>
