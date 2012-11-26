@@ -27,8 +27,15 @@ int fixup_cmd_erlang_cast(void** param, int param_no);
 int cmd_erlang_cast(struct sip_msg* msg, char* str1, char* str2, char* str3);
 int send_erlang_cast(struct erlang_cmd* erl_cmd);
 
+int fixup_cmd_erlang_call(void** param, int param_no);
+int cmd_erlang_call(struct sip_msg* msg, char *cn , char *dest, char *term, char *route, char *_ret_pv);
+int send_erlang_call(struct erlang_cmd* erl_cmd);
+
 int fixup_cmd_erlang_rex(void** param, int param_no);
 int cmd_erlang_rex(struct sip_msg* msg, char *cn , char *mo, char *fu, char *ar, char *route, char *_ret_pv);
 int send_erlang_rex(struct erlang_cmd* erl_cmd);
+
+/* erlang_utils.c */
+void utils_mk_ref(ei_cnode* ec, erlang_ref* ref);
 /** @} */
 #endif 

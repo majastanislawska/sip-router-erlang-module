@@ -59,6 +59,7 @@ void child_loop(int data_pipe)
 		    send_erlang_cast(&erl_cmd);
 		    break;
 		case ERLANG_CALL:
+		    send_erlang_call(&erl_cmd);
 		    break;
 		case ERLANG_REX:
 		    send_erlang_rex(&erl_cmd);

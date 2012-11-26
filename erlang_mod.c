@@ -8,6 +8,7 @@
 #include "../../dprint.h"
 
 //global vars
+struct globals_t *globals=0;
 struct nodes_list* nodes_lst=0; //connected remote nodes 
 //static struct ctrl_socket* ctrl_sock_lst=0;
 static int fd_no=0; /* number of fd used */
@@ -30,6 +31,7 @@ static int erlang_mod_init(void);
 static void erlang_mod_destroy(void);
 static int erlang_child_init(int rank);
 static int add_node(modparam_t type, void * val);
+static void free_node (struct nodes_list *node);
 
 MODULE_VERSION
 
@@ -50,7 +52,7 @@ static rpc_export_t erlang_rpc[]={
 
 static cmd_export_t cmds[] = {
 	{"erlang_cast", (cmd_function)cmd_erlang_cast, 3, fixup_cmd_erlang_cast, ANY_ROUTE},
-//	{"erlang_call", (cmd_function)cmd_erlang_call, 3, fixup_cmd_erlang_call, ANY_ROUTE},
+	{"erlang_call", (cmd_function)cmd_erlang_call, 5, fixup_cmd_erlang_call, ANY_ROUTE},
 	{"erlang_rex", (cmd_function)cmd_erlang_rex, 6, fixup_cmd_erlang_rex, ANY_ROUTE},
 	{0, 0, 0, 0, 0}
 };
@@ -87,7 +89,6 @@ int mod_register(char *path, int *dlflags, void *p1, void *p2)
 static int erlang_mod_init(void)
 {
 
-	
 	LM_DBG("erlang_modinit, fd_no=%d\n", fd_no);
 	if (load_tm_api(&tm_api)==-1) {
 		LM_ERR("cannot load the TM-functions\n");
@@ -97,7 +98,17 @@ static int erlang_mod_init(void)
 		LM_ERR("erlang_mod_init: pipe() failed\n");
 		return -1;
 	}
-	LM_DBG("erlang_modinit, pipe_fds(%d, %d)\n", pipe_fds[0],pipe_fds[1]);
+	LM_DBG("erlang_mod_init, pipe_fds(%d, %d)\n", pipe_fds[0],pipe_fds[1]);
+	globals=shm_malloc(sizeof(struct globals_t));
+	if(globals==NULL) {
+	    LM_ERR("erlang_mod_init: out of shm for globals\n");
+	    return -1;
+	}
+	if (lock_init(&(globals->ref_lock))==0){
+	    LM_ERR("erlang_mod_init: error initialising ref_lock\n");
+	    return -1;
+	  }
+	  
 	register_procs(1); /* we will be creating an extra process */
 	register_fds(fd_no+2);
 	cfg_register_child(1);
@@ -142,6 +153,8 @@ static int erlang_child_init(int rank)
 
 static void erlang_mod_destroy(void)
 {
+	if(globals!=NULL) shm_free(globals);
+	free_node(nodes_lst);
 	return;
 }
 
@@ -167,4 +180,13 @@ static int add_node(modparam_t type, void * val)
 	return 0;
 }
 
-
+static void free_node (struct nodes_list *node) {
+	if (node) {
+		if(node->name) shm_free(node->name);
+		if(node->cookie) shm_free(node->cookie);
+		if(node->node) shm_free(node->node);
+		free_node(node->next);
+		shm_free(node);
+	}
+	return;
+}

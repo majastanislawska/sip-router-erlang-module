@@ -8,16 +8,23 @@
 #include <ei_connect.h>
 #include <ei.h>
 
+struct globals_t {
+    gen_lock_t ref_lock;
+    unsigned int ref0;
+    unsigned int ref1;
+    unsigned int ref2;
+    int debug;
+};
 /* counter struct
 */
 struct erlang_counters_h {
     counter_handle_t msg_sent;
     counter_handle_t msg_recv;
 };
-/* defined in km_dbase.c */
+extern struct globals_t *globals;
 extern struct erlang_counters_h erlang_cnts_h;
 extern struct tm_binds tm_api;
 extern int pipe_fds[2];
 extern struct tm_binds tm_api;
 /** @} */
-#endif /* _MYSQL_MOD_H */
+#endif /* _ERLANG_MOD_H */
