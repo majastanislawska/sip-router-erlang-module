@@ -8,3 +8,9 @@
 tags
 TAGS
 doc/*.txt
+*.beam
+*.app
+*.log
+*.dump
+erlang/deps/*
+rebar
