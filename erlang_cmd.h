@@ -37,5 +37,7 @@ int send_erlang_rex(struct erlang_cmd* erl_cmd);
 
 /* erlang_utils.c */
 void utils_mk_ref(ei_cnode* ec, erlang_ref* ref);
+struct pending_cmd *find_pending_by_pid(unsigned int num,unsigned int serial);
+
 /** @} */
 #endif 

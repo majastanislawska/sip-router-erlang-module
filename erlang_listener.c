@@ -8,6 +8,9 @@
 #include "../../lvalue.h"
 
 struct pending_cmd *pending_cmds = 0;
+//forward decl
+void fill_retpv(pv_spec_t *dst, ei_x_buff *buf ,int *decode_index);
+
 
 void child_loop(int data_pipe)
 {
@@ -159,36 +162,10 @@ void node_receive(struct nodes_list *node)
 				ei_decode_atom(buf.buff, &decode_index, name);
 				if(strcmp("rex",name)==0) {
 				    LM_DBG("got rex!\n");
-				    LM_DBG("starting scan         %p, %p\n",&pending_cmds,pending_cmds);
-				    current_cmd=NULL;
-				    cmd_p=&pending_cmds;
-				    while(*cmd_p) {
-					LM_DBG("scanning pending_cmds %p, %p, %d %d\n",cmd_p,*cmd_p,(*cmd_p)->tm_hash,(*cmd_p)->tm_label);
-					if (((*cmd_p)->num==msg.to.num) && 
-						    ((*cmd_p)->serial==msg.to.serial)) {
-					    LM_DBG("got match\n");
-					    current_cmd=*cmd_p;
-					    *cmd_p=(*cmd_p)->next;
-					    break;
-					}
-					cmd_p=&((*cmd_p)->next);
-					LM_DBG("continuing\n");
-				    }
-				    LM_DBG("after scan            %p, %p\n",&pending_cmds,pending_cmds);
+				    current_cmd=find_pending_by_pid(msg.to.num,msg.to.serial);
 				    if(current_cmd!=NULL) {
 					LM_DBG("ret_pv is:   %p\n",current_cmd->ret_pv);
-					if(current_cmd->ret_pv!=NULL) {
-					    pv_spec_t *dst = current_cmd->ret_pv;
-					    pv_value_t val;
-					    i=decode_index;
-					    pbuf=malloc(BUFSIZ);
-					    LM_DBG("node_receive: buf.index=%d decode_index=%d i=%d j=%d\n", buf.index, decode_index,i,j );
-					    ei_s_print_term(&pbuf, buf.buff, &i);
-					    val.rs.s = pbuf;
-					    val.rs.len = strlen(pbuf);
-					    val.flags = PV_VAL_STR;
-					    dst->setf(0, &dst->pvp, (int)EQ_T, &val);
-					}
+					fill_retpv(current_cmd->ret_pv,&buf,&decode_index);
 					struct action *a = main_rt.rlist[current_cmd->route_no];
 					tm_api.t_continue(current_cmd->tm_hash, current_cmd->tm_label, a);
 					LM_DBG("after t_continue\n");
@@ -323,4 +300,22 @@ error:
 	}
 	free_params(params_list);
 	return 0;
+}
+
+void fill_retpv(pv_spec_t *dst, ei_x_buff *buf ,int *decode_index) {
+    if(dst==NULL)
+	return;
+    pv_value_t val;
+    char *pbuf=NULL;
+    pbuf=shm_malloc(BUFSIZ);
+    if (!pbuf) {
+	LM_ERR("no shm memory\n\n");
+	return;
+    }
+    ei_s_print_term(&pbuf, buf->buff, decode_index);
+    LM_DBG("fill_retpv: %s\n", pbuf);
+    val.rs.s = pbuf;
+    val.rs.len = strlen(pbuf);
+    val.flags = PV_VAL_STR;
+    dst->setf(0, &dst->pvp, (int)EQ_T, &val);
 }
