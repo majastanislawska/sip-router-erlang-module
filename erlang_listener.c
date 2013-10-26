@@ -135,7 +135,7 @@ void node_receive(struct nodes_list *node)
 	    LM_DBG("node_receive ERL_MSG\n");
 	    switch (msg.msgtype) {
 		case ERL_SEND:
-		    LM_DBG("erl_send from %s:<%d.%d.%d> to %s,<%d.%d.%d> to %s (cookie %s)\n", 
+		    LM_DBG("node_receive ERL_MSG erl_send from %s:<%d.%d.%d> to %s,<%d.%d.%d> to %s (cookie %s)\n", 
 			    msg.from.node, msg.from.num, msg.from.serial, msg.from.creation,
 			    msg.to.node,msg.to.num,msg.to.serial,msg.to.creation,
 			    msg.toname,msg.cookie);
@@ -209,9 +209,9 @@ void node_receive(struct nodes_list *node)
 //				
 //				break;
 			    default:
-				LM_ERR("node_receive: expected atom or pid as 1st element of tuple\n");
+				LM_ERR("node_receive: expected atom or pid as 1st element of tuple (GOT %c)\n",i);
 			}
-			LM_DBG("end of ERL_SEND!\n");
+			LM_DBG("end of node_receive case ERL_SEND!\n");
 		    } else {
 			LM_DBG("node_receive: not ERL_SMALL_TUPLE nor ERL_LARGE_TUPLE_EXT i=%d j=%d\n", i, j );
 		    }
