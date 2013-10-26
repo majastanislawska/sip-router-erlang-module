@@ -38,11 +38,11 @@ int cmd_erlang_call(struct sip_msg* msg, char *cn , char *rp, char *ar, char *rt
 	ei_x_buff argbuf;
 	struct nodes_list* node;
 	struct erlang_cmd erl_cmd;
-	erlang_ref ref;
 	erlang_pid erl_pid;
 	str conname, regproc, ret, route;
 	pv_spec_t *ret_pv;
 	
+	memset(&erl_cmd,0,sizeof(struct erlang_cmd));
 	if(msg==NULL) {
 	    LM_ERR("cmd_erlang_call: received null msg\n");
 	    return -1;
@@ -139,8 +139,13 @@ int cmd_erlang_call(struct sip_msg* msg, char *cn , char *rp, char *ar, char *rt
 	erl_pid.serial=erl_cmd.tm_label;
 	ei_x_encode_pid(&argbuf, &erl_pid);
 //	ei_x_encode_pid(&argbuf, ei_self(ec));
-	utils_mk_ref(&(node->ec),&ref);
-	ei_x_encode_ref(&argbuf, &ref);
+	erl_cmd.ref=shm_malloc(sizeof(erlang_ref));
+	if(!erl_cmd.ref) {
+	    LM_ERR("no shm");
+	    return -1;
+	}
+	utils_mk_ref(&(node->ec),erl_cmd.ref);
+	ei_x_encode_ref(&argbuf, erl_cmd.ref);
 	//so much for pid, now encode rex call tuple {call, mod, fun, arg, user}
 //	ei_x_encode_tuple_header(&argbuf, 5);
 //	ei_x_encode_atom(&argbuf,"call");
@@ -180,6 +185,9 @@ int send_erlang_call(struct erlang_cmd *erl_cmd) {
     cmd->serial=erl_cmd->tm_label & 0x1FFF;// --,,--
     cmd->tm_hash=erl_cmd->tm_hash;
     cmd->tm_label=erl_cmd->tm_label;
+    cmd->refn0=(erl_cmd->ref->n)[0];
+    cmd->refn1=(erl_cmd->ref->n)[1];
+    cmd->refn2=(erl_cmd->ref->n)[2];
     cmd->next=pending_cmds;
     pending_cmds=cmd;
     return 0;

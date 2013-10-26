@@ -72,6 +72,7 @@ void child_loop(int data_pipe)
 	    }
 	    if(erl_cmd.reg_name) shm_free(erl_cmd.reg_name);
 	    if(erl_cmd.erlbuf) shm_free(erl_cmd.erlbuf);
+	    if(erl_cmd.ref) shm_free(erl_cmd.ref);
 //	    LM_DBG("sent to erlang: %d bytes\n",readcount);
 	    continue;
 	}
@@ -119,6 +120,7 @@ void node_receive(struct nodes_list *node)
     struct pending_cmd **cmd_p, *current_cmd;
 //    ei_term tuple_term, first_term;
     erlang_pid pid;
+    erlang_ref ref;
     erlang_msg msg;
     ei_x_buff buf;
     ei_x_buff rbuf;
@@ -185,6 +187,25 @@ void node_receive(struct nodes_list *node)
 //				ei_decode_pid(buf.buff, &decode_index, &pid);
 //				
 //				break;
+			    case ERL_NEW_REFERENCE_EXT:
+			    case ERL_REFERENCE_EXT:
+				    ei_decode_ref(buf.buff, &decode_index, &ref);
+				    current_cmd=find_pending_by_ref(ref.n[0], ref.n[1], ref.n[2]);
+				    if(current_cmd!=NULL) {
+					LM_DBG("ret_pv is:   %p\n",current_cmd->ret_pv);
+					fill_retpv(current_cmd->ret_pv,&buf,&decode_index);
+					struct action *a = main_rt.rlist[current_cmd->route_no];
+					tm_api.t_continue(current_cmd->tm_hash, current_cmd->tm_label, a);
+					LM_DBG("after t_continue\n");
+				    }else {
+					i=decode_index;
+					pbuf=malloc(BUFSIZ);
+					LM_DBG("node_receive: buf.index=%d decode_index=%d i=%d j=%d\n", buf.index, decode_index,i,j );
+					ei_s_print_term(&pbuf, buf.buff, &i);
+					LM_ERR("node_receive: Unexpected message  pbuf='%s' buf.index=%d decode_index=%d i=%d j=%d\n", pbuf, buf.index, decode_index,i,j );
+					free(pbuf);
+				    }
+				break;
 			    default:
 				LM_ERR("node_receive: expected atom or pid as 1st element of tuple (GOT %c)\n",i);
 			}

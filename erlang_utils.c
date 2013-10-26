@@ -50,3 +50,23 @@ struct pending_cmd *find_pending_by_pid(unsigned int num,unsigned int serial) {
     LM_DBG("after scan            %p, %p\n",&pending_cmds,pending_cmds);
     return current_cmd;
 }
+struct pending_cmd *find_pending_by_ref(unsigned int n0, unsigned int n1, unsigned int n2) {
+    struct pending_cmd **cmd_p, *current_cmd;
+    current_cmd=NULL;
+    cmd_p=&pending_cmds;
+    while(*cmd_p) {
+	LM_DBG("scanning pending_cmds %p, %p, %d %d\n",cmd_p,*cmd_p,(*cmd_p)->tm_hash,(*cmd_p)->tm_label);
+	if (((*cmd_p)->refn0 == n0) &&
+	    ((*cmd_p)->refn1 == n1) &&
+	    ((*cmd_p)->refn2 == n2)) {
+	    LM_DBG("got match\n");
+	    current_cmd=*cmd_p;
+	    *cmd_p=(*cmd_p)->next;
+	    break;
+	}
+	cmd_p=&((*cmd_p)->next);
+	LM_DBG("continuing\n");
+    }
+    LM_DBG("after scan            %p, %p\n",&pending_cmds,pending_cmds);
+    return current_cmd;
+}

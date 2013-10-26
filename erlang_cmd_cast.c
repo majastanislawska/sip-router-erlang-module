@@ -40,6 +40,7 @@ int cmd_erlang_cast(struct sip_msg* msg, char* cn, char* rp, char* et) {
 	str regproc;
 //	str erlterm;
 
+	memset(&erl_cmd,0,sizeof(struct erlang_cmd));
 	if(msg==NULL) {
 		LM_ERR("received null msg\n");
 		return -1;

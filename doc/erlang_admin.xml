@@ -103,7 +103,7 @@ modparam("erlang","connect","name=con1;cookie=cookie;node=test@localhost")
                 reg_proc is a name of registered process running on remote node
             </para>
             <para>
-                term is a string containing expression to be sent. It may contain pseudo-variables 
+                term is a string containing Erlang expression to be sent. It may contain pseudo-variables
                 which will be expanded before conversion to Erlang Binary Format.
             </para>
             <example>
@@ -114,6 +114,45 @@ erlang_cast("con1","console","\"ok\"");
 erlang_cast("con1","console","{\"$mb\",\"$rb\"}");
 erlang_cast("con1","console","{$pp,\"$pr\"}");
 erlang_cast("con1","console","{\"$timef(%m/%d/%y)\",[{method,'$rm'},{'r-uri',\"$ru\"}]}");
+...
+                </programlisting>
+            </example>
+        </section>
+        <section>
+            <title>
+                <function moreinfo="none">erlang_call(node_name, reg_proc, term, return_route, result)</function>
+            </title>
+            <para>
+                Makes a standard gen_server:call to registered gen_server process in erlang VM.
+                Usage is analogous to erl_call command line tool.
+                Function returns false when node_name, return_route is invalid result is not valid variable,
+                or when args or PV expansion of args does not form a valid erlang term (it is not checked if it is actually a list).
+                On success execution of script is suspended, and upon receiving reply SIP processing resumes in return_route.
+            </para>
+            <para>
+                Since the SIP request handling is resumed in another process,
+                the config file execution is lost. As mentioned above, only
+                shared variables ($shv, etc) should be used for any value that
+                will be needed when the script is resumed.
+            </para>
+            <para>
+                node_name should match a name attribute in one of connect parameters
+            </para>
+            <para>
+                reg_proc is a name of registered process running on remote node
+            </para>
+            <para>
+                term is a string containing Erlang expression to be sent. It may contain pseudo-variables
+                which will be expanded before conversion to Erlang Binary Format.
+            </para>
+            <para>
+                return_route name of route in which processing of SIP message will resume after receiving reply from erlang.
+            </para>
+            <example>
+                <title><function>erlang_call</function> usage</title>
+                <programlisting format="linespecific">
+...
+erlang_call("con1","route_server","[{method,'$rm'},{'r-uri',\"$ru\"}]", "ERL_ROUTE", "$var(result)");
 ...
                 </programlisting>
             </example>

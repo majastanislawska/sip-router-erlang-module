@@ -2,8 +2,8 @@
 #define _ERLANG_LISTENER_H
 
 #include <time.h>
-
 #include "../../parser/parse_param.h"
+
 struct nodes_list{
 	char *name;
 	char *cookie;
@@ -23,6 +23,9 @@ struct pending_cmd {
 	unsigned int serial;
 	unsigned int tm_hash;
 	unsigned int tm_label;
+	unsigned int refn0;
+	unsigned int refn1;
+	unsigned int refn2;
 	struct pending_cmd *next;
 };
 extern struct pending_cmd *pending_cmds;

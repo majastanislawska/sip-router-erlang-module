@@ -21,6 +21,7 @@ struct erlang_cmd {
     int route_no;
     unsigned int tm_hash;
     unsigned int tm_label;
+    erlang_ref *ref;
 };
 
 int fixup_cmd_erlang_cast(void** param, int param_no);
@@ -38,6 +39,6 @@ int send_erlang_rex(struct erlang_cmd* erl_cmd);
 /* erlang_utils.c */
 void utils_mk_ref(ei_cnode* ec, erlang_ref* ref);
 struct pending_cmd *find_pending_by_pid(unsigned int num,unsigned int serial);
-
+struct pending_cmd *find_pending_by_ref(unsigned int n0, unsigned int n1, unsigned int n2);
 /** @} */
 #endif 

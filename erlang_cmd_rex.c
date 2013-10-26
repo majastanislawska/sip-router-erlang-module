@@ -44,6 +44,7 @@ int cmd_erlang_rex(struct sip_msg* msg, char *cn , char *mo, char *fu, char *ar,
 	str conname, mod, fun, args, ret, route;
 	pv_spec_t *ret_pv;
 	
+	memset(&erl_cmd,0,sizeof(struct erlang_cmd));
 	if(msg==NULL) {
 	    LM_ERR("received null msg\n");
 	    return -1;
