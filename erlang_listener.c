@@ -148,11 +148,11 @@ void node_receive(struct nodes_list *node)
 		    ei_decode_version(buf.buff,&decode_index,&j);
 //debug 
 		    i=decode_index;
-		    pbuf=malloc(BUFSIZ);
+		    pbuf=pkg_malloc(BUFSIZ);
 		    LM_DBG("node_receive: buf.index=%d decode_index=%d i=%d j=%d\n", buf.index, decode_index,i,j );
 		    ei_s_print_term(&pbuf, buf.buff, &i);
 		    LM_DBG("node_receive: message is pbuf='%s' buf.index=%d decode_index=%d i=%d j=%d\n", pbuf, buf.index, decode_index,i,j );
-		    free(pbuf);
+		    pkg_free(pbuf);
 //end debug
 		    ei_get_type(buf.buff, &decode_index, &i, &j); //i is type, j is size
 		    LM_DBG("node_receive: buf.index=%d decode_index=%d i=%d j=%d\n", buf.index, decode_index,i,j );
@@ -171,13 +171,14 @@ void node_receive(struct nodes_list *node)
 					struct action *a = main_rt.rlist[current_cmd->route_no];
 					tm_api.t_continue(current_cmd->tm_hash, current_cmd->tm_label, a);
 					LM_DBG("after t_continue\n");
+					shm_free(current_cmd);
 				    } else {
 					i=decode_index;
-					pbuf=malloc(BUFSIZ);
+					pbuf=pkg_malloc(BUFSIZ);
 					LM_DBG("node_receive: buf.index=%d decode_index=%d i=%d j=%d\n", buf.index, decode_index,i,j );
 					ei_s_print_term(&pbuf, buf.buff, &i);
 					LM_ERR("node_receive: Unexpected message  pbuf='%s' buf.index=%d decode_index=%d i=%d j=%d\n", pbuf, buf.index, decode_index,i,j );
-					free(pbuf);
+					pkg_free(pbuf);
 				    }
 				} else {
 				    LM_ERR("Don't know how to handle msg with {%s,...}\n",name);
@@ -197,13 +198,14 @@ void node_receive(struct nodes_list *node)
 					struct action *a = main_rt.rlist[current_cmd->route_no];
 					tm_api.t_continue(current_cmd->tm_hash, current_cmd->tm_label, a);
 					LM_DBG("after t_continue\n");
+					shm_free(current_cmd);
 				    }else {
 					i=decode_index;
-					pbuf=malloc(BUFSIZ);
+					pbuf=pkg_malloc(BUFSIZ);
 					LM_DBG("node_receive: buf.index=%d decode_index=%d i=%d j=%d\n", buf.index, decode_index,i,j );
 					ei_s_print_term(&pbuf, buf.buff, &i);
 					LM_ERR("node_receive: Unexpected message  pbuf='%s' buf.index=%d decode_index=%d i=%d j=%d\n", pbuf, buf.index, decode_index,i,j );
-					free(pbuf);
+					pkg_free(pbuf);
 				    }
 				break;
 			    default:
@@ -222,10 +224,10 @@ void node_receive(struct nodes_list *node)
 		    ei_decode_version(buf.buff,&decode_index,&j);
 		    i=decode_index;
 //debug
-		    pbuf=malloc(BUFSIZ);
+		    pbuf=pkg_malloc(BUFSIZ);
 		    ei_s_print_term(&pbuf, buf.buff, &i);
 		    LM_DBG("erl_send: message is '%s' %d %d %d\n", pbuf, buf.index, i,j );
-		    free(pbuf);
+		    pkg_free(pbuf);
 //end debug
 		    break;
 		case ERL_LINK:
@@ -328,7 +330,7 @@ void fill_retpv(pv_spec_t *dst, ei_x_buff *buf ,int *decode_index) {
 	return;
     pv_value_t val;
     char *pbuf=NULL;
-    pbuf=shm_malloc(BUFSIZ);
+    pbuf=pkg_malloc(BUFSIZ);
     if (!pbuf) {
 	LM_ERR("no shm memory\n\n");
 	return;
@@ -339,4 +341,5 @@ void fill_retpv(pv_spec_t *dst, ei_x_buff *buf ,int *decode_index) {
     val.rs.len = strlen(pbuf);
     val.flags = PV_VAL_STR;
     dst->setf(0, &dst->pvp, (int)EQ_T, &val);
+    pkg_free(pbuf);
 }
