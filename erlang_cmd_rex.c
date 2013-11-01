@@ -175,6 +175,7 @@ int send_erlang_rex(struct erlang_cmd *erl_cmd) {
 	return -2;
     }
     cmd->ret_pv=erl_cmd->ret_pv;
+    cmd->cmd=erl_cmd->cmd;
     cmd->route_no=erl_cmd->route_no;
     cmd->num=erl_cmd->tm_hash & 0x7FFF;    //mask bits that got trough erlang pid
     cmd->serial=erl_cmd->tm_label & 0x1FFF;// --,,--

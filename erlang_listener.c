@@ -64,6 +64,9 @@ void child_loop(int data_pipe)
 		case ERLANG_CALL:
 		    send_erlang_call(&erl_cmd);
 		    break;
+		case ERLANG_CALL_ROUTE:
+		    send_erlang_call_route(&erl_cmd);
+		    break;
 		case ERLANG_REX:
 		    send_erlang_rex(&erl_cmd);
 		    break;
@@ -194,6 +197,19 @@ void node_receive(struct nodes_list *node)
 				    current_cmd=find_pending_by_ref(ref.n[0], ref.n[1], ref.n[2]);
 				    if(current_cmd!=NULL) {
 					LM_DBG("ret_pv is:   %p\n",current_cmd->ret_pv);
+					if (current_cmd->cmd==ERLANG_CALL_ROUTE) {
+					    ei_decode_tuple_header(buf.buff, &decode_index, &i);
+					    ei_get_type(buf.buff, &decode_index, &i, &j);
+					    ei_decode_atom(buf.buff, &decode_index, name);
+					    current_cmd->route_no=route_get(&main_rt, name);
+					    if (current_cmd->route_no==-1){
+						ERR("node_receive: failed to fix route \"%s\": route_get() failed\n",name);
+						return -1;
+					    }
+					    if (main_rt.rlist[current_cmd->route_no]==0){
+						WARN("node_receive: route \"%s\" is empty / doesn't exist\n", name);
+					    }
+					}
 					fill_retpv(current_cmd->ret_pv,&buf,&decode_index);
 					struct action *a = main_rt.rlist[current_cmd->route_no];
 					tm_api.t_continue(current_cmd->tm_hash, current_cmd->tm_label, a);

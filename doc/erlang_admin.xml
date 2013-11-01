@@ -159,6 +159,39 @@ erlang_call("con1","route_server","[{method,'$rm'},{'r-uri',\"$ru\"}]", "ERL_ROU
         </section>
         <section>
             <title>
+                <function moreinfo="none">erlang_call_route(node_name, reg_proc, term, result)</function>
+            </title>
+            <para>
+                This function does exactly like erlang_call, except that it requires that reply from erlang
+                is 2-element tuple conatining name of kamailio route to be executed and term to be passed to result variable.
+            </para>
+            <para>
+                Since the SIP request handling is resumed in another process,
+                the config file execution is lost. As mentioned above, only
+                shared variables ($shv, etc) should be used for any value that
+                will be needed when the script is resumed.
+            </para>
+            <para>
+                node_name should match a name attribute in one of connect parameters
+            </para>
+            <para>
+                reg_proc is a name of registered process running on remote node
+            </para>
+            <para>
+                term is a string containing Erlang expression to be sent. It may contain pseudo-variables
+                which will be expanded before conversion to Erlang Binary Format.
+            </para>
+            <example>
+                <title><function>erlang_call</function> usage</title>
+                <programlisting format="linespecific">
+...
+erlang_call_route("con1","route_server","[{method,'$rm'},{'r-uri',\"$ru\"}]", "$var(result)");
+...
+                </programlisting>
+            </example>
+        </section>
+        <section>
+            <title>
                 <function moreinfo="none">erlang_rex(node_name, mod, fun, args, return_route, result)</function>
             </title>
             <para>

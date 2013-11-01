@@ -53,6 +53,7 @@ static rpc_export_t erlang_rpc[]={
 static cmd_export_t cmds[] = {
 	{"erlang_cast", (cmd_function)cmd_erlang_cast, 3, fixup_cmd_erlang_cast, ANY_ROUTE},
 	{"erlang_call", (cmd_function)cmd_erlang_call, 5, fixup_cmd_erlang_call, ANY_ROUTE},
+	{"erlang_call_route", (cmd_function)cmd_erlang_call_route, 4, fixup_cmd_erlang_call_route, ANY_ROUTE},
 	{"erlang_rex", (cmd_function)cmd_erlang_rex, 6, fixup_cmd_erlang_rex, ANY_ROUTE},
 	{0, 0, 0, 0, 0}
 };

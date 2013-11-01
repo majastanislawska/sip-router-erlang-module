@@ -18,6 +18,7 @@ extern struct nodes_list* nodes_lst;
 
 struct pending_cmd {
 	pv_spec_t * ret_pv;
+	int cmd;
 	int route_no;
 	unsigned int num;
 	unsigned int serial;
