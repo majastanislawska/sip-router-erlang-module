@@ -44,7 +44,7 @@ void child_loop(int data_pipe)
 	cfg_update();
 
 	if(selret < 0) {
-	    LM_ERR("error in select(): %d %s\n",errno,strerror(errno));
+	    LM_ERR("erlang_child_loop: error in select(): %d %s\n",errno,strerror(errno));
 	    continue;
 	}
 	if(selret==0) {
@@ -54,7 +54,7 @@ void child_loop(int data_pipe)
 	if(FD_ISSET(data_pipe, &fdset)) {
 	    int nodeid=0;
 	    readcount=read(data_pipe, &erl_cmd, sizeof(erl_cmd));
-	    LM_DBG("read %d %d %s %d %p %p\n",readcount,
+	    LM_DBG("erlang_child_loop: read from worker %d %d %s %d %p %p\n",readcount,
 			erl_cmd.cmd,erl_cmd.reg_name,erl_cmd.erlbuf_len,erl_cmd.erlbuf,erl_cmd.node);
 	    node=erl_cmd.node;
 	    switch(erl_cmd.cmd) {
@@ -68,7 +68,7 @@ void child_loop(int data_pipe)
 		    send_erlang_rex(&erl_cmd);
 		    break;
 		default:
-		    LM_ERR("unknown cmd_pipe command: %d\n",erl_cmd.cmd);
+		    LM_ERR("erlang_child_loop: unknown cmd_pipe command: %d\n",erl_cmd.cmd);
 	    }
 	    if(erl_cmd.reg_name) shm_free(erl_cmd.reg_name);
 	    if(erl_cmd.erlbuf) shm_free(erl_cmd.erlbuf);
