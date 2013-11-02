@@ -174,6 +174,7 @@ void node_receive(struct nodes_list *node)
 					struct action *a = main_rt.rlist[current_cmd->route_no];
 					tm_api.t_continue(current_cmd->tm_hash, current_cmd->tm_label, a);
 					LM_DBG("after t_continue\n");
+					shm_free(current_cmd->ret_pv);
 					shm_free(current_cmd);
 				    } else {
 					i=decode_index;
@@ -214,6 +215,7 @@ void node_receive(struct nodes_list *node)
 					struct action *a = main_rt.rlist[current_cmd->route_no];
 					tm_api.t_continue(current_cmd->tm_hash, current_cmd->tm_label, a);
 					LM_DBG("after t_continue\n");
+					shm_free(current_cmd->ret_pv);
 					shm_free(current_cmd);
 				    }else {
 					i=decode_index;
