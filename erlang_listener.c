@@ -5,21 +5,20 @@
 #include "../../dprint.h"
 #include "../../shm_init.h"
 #include "../../cfg/cfg_struct.h"
-#include "../../lvalue.h"
 
-struct pending_cmd *pending_cmds = 0;
+struct erlang_cmd *pending_cmds = 0;
 //forward decl
-void fill_retpv(pv_spec_t *dst, ei_x_buff *buf ,int *decode_index);
-
+int send_erlang(struct erlang_cmd *erl_cmd);
 
 void child_loop(int data_pipe)
 {
     fd_set fdset;
     int selret,maxfd;
     struct nodes_list *node;
-    struct erlang_cmd erl_cmd;
+    struct erlang_cmd *erl_cmd;
     struct timeval tv;
     int readcount;
+    int erl_retcode=-1;
 
     while(1) {
 	FD_ZERO(&fdset);
@@ -51,38 +50,52 @@ void child_loop(int data_pipe)
 //	    LM_DBG("erlang_child_loop: timeout\n");
 	    continue;
 	}
-	if(FD_ISSET(data_pipe, &fdset)) {
-	    int nodeid=0;
-	    readcount=read(data_pipe, &erl_cmd, sizeof(erl_cmd));
-	    LM_DBG("erlang_child_loop: read from worker %d %d %s %d %p %p\n",readcount,
-			erl_cmd.cmd,erl_cmd.reg_name,erl_cmd.erlbuf_len,erl_cmd.erlbuf,erl_cmd.node);
-	    node=erl_cmd.node;
-	    switch(erl_cmd.cmd) {
-		case ERLANG_CAST: 
-		    send_erlang_cast(&erl_cmd);
-		    break;
-		case ERLANG_CALL:
-		    send_erlang_call(&erl_cmd);
-		    break;
-		case ERLANG_CALL_ROUTE:
-		    send_erlang_call_route(&erl_cmd);
-		    break;
-		case ERLANG_REX:
-		    send_erlang_rex(&erl_cmd);
-		    break;
-		default:
-		    LM_ERR("erlang_child_loop: unknown cmd_pipe command: %d\n",erl_cmd.cmd);
-	    }
-	    if(erl_cmd.reg_name) shm_free(erl_cmd.reg_name);
-	    if(erl_cmd.erlbuf) shm_free(erl_cmd.erlbuf);
-	    if(erl_cmd.ref) shm_free(erl_cmd.ref);
-//	    LM_DBG("sent to erlang: %d bytes\n",readcount);
-	    continue;
-	}
 	for(node=nodes_lst; node; node=node->next){
 	    if(FD_ISSET(node->fd, &fdset)) {
 		node_receive(node);
 	    }
+	}
+
+	if(FD_ISSET(data_pipe, &fdset)) {
+	    int unlock=0;
+	    readcount=read(data_pipe, &erl_cmd, sizeof(erl_cmd));
+	    LM_DBG("erlang_child_loop: read from worker %d %d %s %d %p %p\n",readcount,
+			erl_cmd->cmd,erl_cmd->reg_name,erl_cmd->erlbuf_len,erl_cmd->erlbuf,erl_cmd->node);
+	    node=erl_cmd->node;
+	    switch(erl_cmd->cmd) {
+		case ERLANG_INFO:
+		case ERLANG_CAST: 
+		    erl_retcode=send_erlang(erl_cmd);
+		    unlock=1;
+		    break;
+		case ERLANG_CALL:
+		case ERLANG_CALL_ROUTE:
+		case ERLANG_REX:
+		    erl_retcode=send_erlang(erl_cmd);
+		    break;
+		default:
+		    LM_ERR("erlang_child_loop: unknown cmd_pipe command: %d\n",erl_cmd->cmd);
+	    }
+	    //not needed anymore, will be malloced again when response arrives
+	    shm_free(erl_cmd->erlbuf);
+	    erl_cmd->erlbuf=NULL;
+	    erl_cmd->erlbuf_len=0;
+
+	    if(erl_retcode<0) {
+		LM_ERR("erlang_child_loop: erl_send failed: %d (unlocking)\n",erl_retcode);
+		erl_cmd->retcode=erl_retcode;
+		lock_release(&(erl_cmd->lock)); //unlock and let it fail in worker
+		continue;
+	    }
+	    LM_DBG("erlang_child_loop: erl_send success: %d\n",erl_retcode);
+	    if(unlock) {
+		lock_release(&(erl_cmd->lock));
+	    } else {
+		//no unlock, hold worker until reply comes
+		erl_cmd->next=pending_cmds;
+		pending_cmds=erl_cmd;
+	    }
+	    continue;
 	}
     }
 }
@@ -110,26 +123,22 @@ int node_reconnect(struct nodes_list *node)
 	node->timeout=t+30;
 	return -1;
     }
-//    LM_DBG("erlang_child_init: ei_connect sucseded fd=%d  %s\n",node->fd, node->node);
+    LM_INFO("erlang_child_init: ei_connect connected to  %s fd=%d\n",node->node, node->fd);
     return 0;
 }
 void node_receive(struct nodes_list *node)
 {
     int status = 1;
-//    char ppbuf[512];
     char *pbuf= NULL;
     char name[MAXATOMLEN];
     int i=0,j=0, decode_index=0;
-    struct pending_cmd **cmd_p, *current_cmd;
-//    ei_term tuple_term, first_term;
+    struct erlang_cmd **cmd_p, *current_cmd;
     erlang_pid pid;
     erlang_ref ref;
     erlang_msg msg;
     ei_x_buff buf;
-    ei_x_buff rbuf;
     
     ei_x_new(&buf);
-    ei_x_new_with_version(&rbuf);
 
 //    LM_DBG("node_receive %s  fd=%d \n",node->node, node->fd);
     memset(&msg,0,sizeof(msg));
@@ -154,7 +163,7 @@ void node_receive(struct nodes_list *node)
 		    pbuf=pkg_malloc(BUFSIZ);
 		    LM_DBG("node_receive: buf.index=%d decode_index=%d i=%d j=%d\n", buf.index, decode_index,i,j );
 		    ei_s_print_term(&pbuf, buf.buff, &i);
-		    LM_DBG("node_receive: message is pbuf='%s' buf.index=%d decode_index=%d i=%d j=%d\n", pbuf, buf.index, decode_index,i,j );
+		    LM_DBG("node_receive: message is pbuf='%s' buf.buffsz=%d buf.index=%d decode_index=%d i=%d j=%d\n", pbuf, buf.buffsz,buf.index, decode_index,i,j );
 		    pkg_free(pbuf);
 //end debug
 		    ei_get_type(buf.buff, &decode_index, &i, &j); //i is type, j is size
@@ -169,13 +178,13 @@ void node_receive(struct nodes_list *node)
 				    LM_DBG("got rex!\n");
 				    current_cmd=find_pending_by_pid(msg.to.num,msg.to.serial);
 				    if(current_cmd!=NULL) {
-					LM_DBG("ret_pv is:   %p\n",current_cmd->ret_pv);
-					fill_retpv(current_cmd->ret_pv,&buf,&decode_index);
-					struct action *a = main_rt.rlist[current_cmd->route_no];
-					tm_api.t_continue(current_cmd->tm_hash, current_cmd->tm_label, a);
-					LM_DBG("after t_continue\n");
-					shm_free(current_cmd->ret_pv);
-					shm_free(current_cmd);
+					LM_DBG("node_receive: got rex response unlcoking  %p\n",current_cmd);
+					current_cmd->retcode=0;
+					current_cmd->erlbuf=shm_malloc(buf.buffsz);
+					memcpy(current_cmd->erlbuf, buf.buff, buf.buffsz);
+					current_cmd->erlbuf_len=buf.buffsz;
+					current_cmd->decode_index=decode_index;
+					lock_release(&(current_cmd->lock));
 				    } else {
 					i=decode_index;
 					pbuf=pkg_malloc(BUFSIZ);
@@ -197,26 +206,13 @@ void node_receive(struct nodes_list *node)
 				    ei_decode_ref(buf.buff, &decode_index, &ref);
 				    current_cmd=find_pending_by_ref(ref.n[0], ref.n[1], ref.n[2]);
 				    if(current_cmd!=NULL) {
-					LM_DBG("ret_pv is:   %p\n",current_cmd->ret_pv);
-					if (current_cmd->cmd==ERLANG_CALL_ROUTE) {
-					    ei_decode_tuple_header(buf.buff, &decode_index, &i);
-					    ei_get_type(buf.buff, &decode_index, &i, &j);
-					    ei_decode_atom(buf.buff, &decode_index, name);
-					    current_cmd->route_no=route_get(&main_rt, name);
-					    if (current_cmd->route_no==-1){
-						ERR("node_receive: failed to fix route \"%s\": route_get() failed\n",name);
-						return -1;
-					    }
-					    if (main_rt.rlist[current_cmd->route_no]==0){
-						WARN("node_receive: route \"%s\" is empty / doesn't exist\n", name);
-					    }
-					}
-					fill_retpv(current_cmd->ret_pv,&buf,&decode_index);
-					struct action *a = main_rt.rlist[current_cmd->route_no];
-					tm_api.t_continue(current_cmd->tm_hash, current_cmd->tm_label, a);
-					LM_DBG("after t_continue\n");
-					shm_free(current_cmd->ret_pv);
-					shm_free(current_cmd);
+					LM_DBG("node_receive: got call or call_route response unlcoking  %p\n",current_cmd);
+					current_cmd->retcode=0;
+					current_cmd->erlbuf=shm_malloc(buf.buffsz);
+					memcpy(current_cmd->erlbuf, buf.buff, buf.buffsz);
+					current_cmd->erlbuf_len=buf.buffsz;
+					current_cmd->decode_index=decode_index;
+					lock_release(&(current_cmd->lock));
 				    }else {
 					i=decode_index;
 					pbuf=pkg_malloc(BUFSIZ);
@@ -278,7 +274,6 @@ void node_receive(struct nodes_list *node)
 	    break;
     }
     ei_x_free(&buf);
-    ei_x_free(&rbuf);
 }
 
 char *shm_strdup(str *src)
@@ -343,21 +338,10 @@ error:
 	return 0;
 }
 
-void fill_retpv(pv_spec_t *dst, ei_x_buff *buf ,int *decode_index) {
-    if(dst==NULL)
-	return;
-    pv_value_t val;
-    char *pbuf=NULL;
-    pbuf=pkg_malloc(BUFSIZ);
-    if (!pbuf) {
-	LM_ERR("no shm memory\n\n");
-	return;
-    }
-    ei_s_print_term(&pbuf, buf->buff, decode_index);
-    LM_DBG("fill_retpv: %s\n", pbuf);
-    val.rs.s = pbuf;
-    val.rs.len = strlen(pbuf);
-    val.flags = PV_VAL_STR;
-    dst->setf(0, &dst->pvp, (int)EQ_T, &val);
-    pkg_free(pbuf);
+int send_erlang(struct erlang_cmd *erl_cmd) {
+    struct nodes_list *node;
+
+    node=erl_cmd->node;
+    return ei_reg_send(&(node->ec), node->fd, erl_cmd->reg_name,
+	erl_cmd->erlbuf, erl_cmd->erlbuf_len);
 }
