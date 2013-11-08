@@ -18,17 +18,6 @@
         <para>
             This module provides conectivity and data exchange with Distributed Erlang..
         </para>
-        <!-- this fragment taken from jsonrpc-c module docs -->
-        <para>
-            This module uses t_suspend() and t_continue() from the TM module.
-        </para>
-        <para>
-            Note that after invoking an asyncronous operation, the processing
-            will continue later, in another application process. Therefore, do not
-            rely on variables stored in private memory, use shared memory if you
-            want to get values after the processing is resumend (e.g., $shv(...)
-            or htable $sht(...)).
-        </para>
     </section>
 
     <section>
@@ -40,7 +29,7 @@
                 <itemizedlist>
                     <listitem>
                         <para>
-                            <emphasis>tm</emphasis> - transaction management.
+                            none
                         </para>
                     </listitem>
                 </itemizedlist>
@@ -83,18 +72,33 @@ modparam("erlang","connect","name=con1;cookie=cookie;node=test@localhost")
                 </programlisting>
             </example>
         </section>
+        <section>
+            <title><varname>call_route_exit</varname> (int)</title>
+            <para>
+                If set, exit the execution of the configuration file when a route block is executed by erlang_call_route function.
+                If not set script will contininue current route block after returning form route block selected by erlang controller.
+                See erlang_call_route function.
+            </para>
+            <example>
+                <title>Set <varname>call_route_exit</varname> parameter</title>
+                <programlisting format="linespecific">
+...
+modparam("erlang","call_route_exit",1)
+...
+                </programlisting>
+            </example>
+        </section>
     </section>
     <section>
         <title>Exported Functions</title>
         <section>
             <title>
-                <function moreinfo="none">erlang_cast(node_name, reg_proc, term)</function>
+                <function moreinfo="none">erlang_info(node_name, reg_proc, term)</function>
             </title>
             <para>
                 Sends as message to registered process on remote node. Does not expect anything to be sent back.
-                Function returns false only when node_name is invalid, term does not contain valid PVs 
-                or after PV expansion does not form a valid erlang term.
-                Script continues within same worker process while actual sending is done asynchronously in another process.
+                Function returns false when node_name is invalid, term does not contain valid PVs,
+                after PV expansion does not form a valid erlang term and when message cannot be sent (connection broken).
             </para>
             <para>
                 node_name should match a name attribute in one of connect parameters
@@ -105,6 +109,51 @@ modparam("erlang","connect","name=con1;cookie=cookie;node=test@localhost")
             <para>
                 term is a string containing Erlang expression to be sent. It may contain pseudo-variables
                 which will be expanded before conversion to Erlang Binary Format.
+            </para>
+            <para>
+                term parameter is sent as is to erlang procces. If erlang proccess receiving this message is
+                gen_server it will execute handle_info function.
+            </para>
+            <para>
+                This function is equivalent to basic erlang message sending syntax: reg_proc ! term.
+            </para>
+            <example>
+                <title><function>erlang_info</function> usage</title>
+                <programlisting format="linespecific">
+...
+erlang_info("con1","console","\"ok\"");
+erlang_info("con1","console","{\"$mb\",\"$rb\"}");
+erlang_info("con1","console","{$pp,\"$pr\"}");
+erlang_info("con1","console","{\"$timef(%m/%d/%y)\",[{method,'$rm'},{'r-uri',\"$ru\"}]}");
+...
+                </programlisting>
+            </example>
+        </section>
+        <section>
+            <title>
+                <function moreinfo="none">erlang_cast(node_name, reg_proc, term)</function>
+            </title>
+            <para>
+                Sends as message to registered process on remote node. Does not expect anything to be sent back.
+                Function returns false only when node_name is invalid, term does not contain valid PVs,
+                after PV expansion does not form a valid erlang term and when message cannot be sent (connection broken).
+            </para>
+            <para>
+                node_name should match a name attribute in one of connect parameters
+            </para>
+            <para>
+                reg_proc is a name of registered process running on remote node
+            </para>
+            <para>
+                term is a string containing Erlang expression to be sent. It may contain pseudo-variables
+                which will be expanded before conversion to Erlang Binary Format.
+            </para>
+            <para>
+                Actual message sent to erlang is {'$erlang_cast',term}. If erlang proccess receiving this message is
+                gen_server it will execute handle_cast function.
+            </para>
+            <para>
+                This function is equivalent to gen_server:cast(reg_proc,term).
             </para>
             <example>
                 <title><function>erlang_cast</function> usage</title>
@@ -120,20 +169,14 @@ erlang_cast("con1","console","{\"$timef(%m/%d/%y)\",[{method,'$rm'},{'r-uri',\"$
         </section>
         <section>
             <title>
-                <function moreinfo="none">erlang_call(node_name, reg_proc, term, return_route, result)</function>
+                <function moreinfo="none">erlang_call(node_name, reg_proc, term, result)</function>
             </title>
             <para>
                 Makes a standard gen_server:call to registered gen_server process in erlang VM.
-                Usage is analogous to erl_call command line tool.
-                Function returns false when node_name, return_route is invalid result is not valid variable,
-                or when args or PV expansion of args does not form a valid erlang term (it is not checked if it is actually a list).
-                On success execution of script is suspended, and upon receiving reply SIP processing resumes in return_route.
-            </para>
-            <para>
-                Since the SIP request handling is resumed in another process,
-                the config file execution is lost. As mentioned above, only
-                shared variables ($shv, etc) should be used for any value that
-                will be needed when the script is resumed.
+                Function returns false when node_name, result is not valid variable, term does not contain valid PVs,
+                after PV expansion does not form a valid erlang term and when message cannot be sent (connection broken).
+                Worker proces executing current route block is put on hold using locks until reply from erlang is recveived.
+                Then route block is continued within same worker.
             </para>
             <para>
                 node_name should match a name attribute in one of connect parameters
@@ -146,13 +189,17 @@ erlang_cast("con1","console","{\"$timef(%m/%d/%y)\",[{method,'$rm'},{'r-uri',\"$
                 which will be expanded before conversion to Erlang Binary Format.
             </para>
             <para>
-                return_route name of route in which processing of SIP message will resume after receiving reply from erlang.
+                Actual message sent to erlang is {'$erlang_call',term}. If erlang proccess receiving this message is
+                gen_server it will execute handle_call function.
+            </para>
+            <para>
+                This function is equivalent to gen_server:call(reg_proc,term).
             </para>
             <example>
                 <title><function>erlang_call</function> usage</title>
                 <programlisting format="linespecific">
 ...
-erlang_call("con1","route_server","[{method,'$rm'},{'r-uri',\"$ru\"}]", "ERL_ROUTE", "$var(result)");
+erlang_call("con1","route_server","[{method,'$rm'},{'r-uri',\"$ru\"}]", "$var(result)");
 ...
                 </programlisting>
             </example>
@@ -164,12 +211,7 @@ erlang_call("con1","route_server","[{method,'$rm'},{'r-uri',\"$ru\"}]", "ERL_ROU
             <para>
                 This function does exactly like erlang_call, except that it requires that reply from erlang
                 is 2-element tuple conatining name of kamailio route to be executed and term to be passed to result variable.
-            </para>
-            <para>
-                Since the SIP request handling is resumed in another process,
-                the config file execution is lost. As mentioned above, only
-                shared variables ($shv, etc) should be used for any value that
-                will be needed when the script is resumed.
+                Purpose of this function is analogous to prefix_route from prefix_route module.
             </para>
             <para>
                 node_name should match a name attribute in one of connect parameters
@@ -181,31 +223,32 @@ erlang_call("con1","route_server","[{method,'$rm'},{'r-uri',\"$ru\"}]", "ERL_ROU
                 term is a string containing Erlang expression to be sent. It may contain pseudo-variables
                 which will be expanded before conversion to Erlang Binary Format.
             </para>
+            <para>
+                Actual message sent to erlang is {'$erlang_call',term}. If erlang proccess receiving this message is
+                gen_server it will execute handle_call function.
+                Your gen_server have to reply with tuple {'route',term}. 'route' have be and atom.
+            </para>
+            <para>
+                This function is equivalent to gen_server:call(reg_proc,term).
+            </para>
             <example>
                 <title><function>erlang_call</function> usage</title>
                 <programlisting format="linespecific">
 ...
-erlang_call_route("con1","route_server","[{method,'$rm'},{'r-uri',\"$ru\"}]", "$var(result)");
+erlang_call_route("con1","route_server","             [{method,'$rm'},{'r-uri',\"$ru\"}]",  "$var(result)");
+erlang_call_route("con1","echo_server", "{'ERL_ROUTE',[{method,'$rm'},{'r-uri',\"$ru\"}]}", "$var(result)");
 ...
                 </programlisting>
             </example>
         </section>
         <section>
             <title>
-                <function moreinfo="none">erlang_rex(node_name, mod, fun, args, return_route, result)</function>
+                <function moreinfo="none">erlang_rex(node_name, mod, fun, args, result)</function>
             </title>
             <para>
                 Makes a request to Erlang rex server, using the standard Erlang RPC facility.
-                Usage is analogous to erl_call command line tool.
                 Function returns false when node_name, return_route is invalid result is not valid variable,
-                or when args or PV expansion of args does not form a valid erlang term (it is not checked if it is actually a list).
-                On success execution of script is suspended, and upon receiving reply SIP processing resumes in return_route.
-            </para>
-            <para>
-                Since the SIP request handling is resumed in another process,
-                the config file execution is lost. As mentioned above, only
-                shared variables ($shv, etc) should be used for any value that
-                will be needed when the script is resumed.
+                or when args or PV expansion of args does not form a valid erlang term.
             </para>
             <para>
                 node_name should match a name attribute in one of connect parameters
@@ -216,15 +259,21 @@ erlang_call_route("con1","route_server","[{method,'$rm'},{'r-uri',\"$ru\"}]", "$
                 If function does not take any arguments an empty list "[]" should be passed.
             </para>
             <para>
-                return_route name of route in which processing of SIP message will resume after receiving reply from erlang.
+                Actual message sent to erlang is {call, mod, fun, args, user}.
+                You dont need to create special procces on erlang to handle this message.
+                Erlang standard rpc server will handle it, execute function mod:fun(arg1,arg2...)
+                and will send back to kamailio any return value 
+            </para>
+            <para>
+                This function is equivalent to rpc:call(reg_proc,mod,fun,args).
+                Usage is analogous to erl_call command line tool.
             </para>
             <example>
                 <title><function>erlang_rex</function> usage</title>
                 <programlisting format="linespecific">
 ...
-erlang_rex("con1", "erlang", "time", "[]", "ERL_REPL", "$var(result)");
-erlang_rex("con1", "mymodule", "myfunc", "[\"$au\",\"$ad\"]", 
-		"ERL_REPL", "$var(pwd)");
+erlang_rex("con1", "erlang", "time", "[]", "$var(result)");
+erlang_rex("con1", "mymodule", "myfunc", "[\"$au\",\"$ad\"]", "$var(pwd)");
 ...
                 </programlisting>
             </example>
