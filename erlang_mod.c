@@ -14,9 +14,10 @@ struct nodes_list* nodes_lst=0; //connected remote nodes
 static int fd_no=0; /* number of fd used */
 //static int rpc_handler=0;
 
+//module parameters
+int call_route_exit=1;
+
 int pipe_fds[2] = {-1,-1};
-/* tm */
-struct tm_binds tm_api;
 
 struct erlang_counters_h erlang_cnts_h;
 counter_def_t erlang_cnt_defs[] =  {
@@ -51,16 +52,19 @@ static rpc_export_t erlang_rpc[]={
 };
 
 static cmd_export_t cmds[] = {
+	{"erlang_info", (cmd_function)cmd_erlang_info, 3, fixup_cmd_erlang_info, ANY_ROUTE},
 	{"erlang_cast", (cmd_function)cmd_erlang_cast, 3, fixup_cmd_erlang_cast, ANY_ROUTE},
-	{"erlang_call", (cmd_function)cmd_erlang_call, 5, fixup_cmd_erlang_call, ANY_ROUTE},
-	{"erlang_rex", (cmd_function)cmd_erlang_rex, 6, fixup_cmd_erlang_rex, ANY_ROUTE},
+	{"erlang_call", (cmd_function)cmd_erlang_call, 4, fixup_cmd_erlang_call, ANY_ROUTE},
+	{"erlang_call_route", (cmd_function)cmd_erlang_call_route, 4, fixup_cmd_erlang_call_route, ANY_ROUTE},
+	{"erlang_rex", (cmd_function)cmd_erlang_rex, 5, fixup_cmd_erlang_rex, ANY_ROUTE},
 	{0, 0, 0, 0, 0}
 };
 /*
  * Exported parameters
  */
 static param_export_t params[] = {
-	{"connect",   PARAM_STRING|PARAM_USE_FUNC,	(void*) add_node},
+	{"connect",          PARAM_STRING|PARAM_USE_FUNC,	(void*) add_node},
+	{"call_route_exit",  INT_PARAM,                         &call_route_exit},
 	{0, 0, 0}
 };
 
@@ -90,10 +94,6 @@ static int erlang_mod_init(void)
 {
 
 	LM_DBG("erlang_modinit, fd_no=%d\n", fd_no);
-	if (load_tm_api(&tm_api)==-1) {
-		LM_ERR("cannot load the TM-functions\n");
-		return -1;
-	}
 	if (pipe(pipe_fds) < 0) {
 		LM_ERR("erlang_mod_init: pipe() failed\n");
 		return -1;

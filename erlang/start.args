@@ -1,0 +1,23 @@
+
+# Start SASL
+-boot start_sasl
+
+# start lager
+-s lager
+# Start 'sync' script, for auto-reloading
+-s sync
+
+# Start main application
+-s echo
+
+# Node name
+-sname test
+
+# Cookie name
+-setcookie cookie
+
+# Kernel polling
++K true
+
+# 4 async threads
++A 4

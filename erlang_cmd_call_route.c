@@ -5,7 +5,7 @@
 #include "erlang_listener.h"
 #include "../../mod_fix.h"
 
-int fixup_cmd_erlang_call(void** param, int param_no){
+int fixup_cmd_erlang_call_route(void** param, int param_no){
 	if (param_no < 3)
 		return fixup_spve_null(param, 1);
 	if (param_no == 4) {
@@ -17,58 +17,60 @@ int fixup_cmd_erlang_call(void** param, int param_no){
 		s.s = (char*)(*param);
 		s.len = strlen(s.s);
 		if(s.len==0) {
-			LM_ERR("cmd_erlang_call: param %d is empty string! please use erlang empty list [].\n", param_no);
+			LM_ERR("cmd_erlang_call_route: param %d is empty string! please use erlang empty list [].\n", param_no);
 			return -1;
 		}
 		if(pv_parse_format(&s ,&model) || model==NULL) {
-			LM_ERR("cmd_erlang_call: wrong format [%s] for value param!\n", s.s);
+			LM_ERR("cmd_erlang_call_route: wrong format [%s] for value param!\n", s.s);
 			return -1;
 		}
 		*param = (void*)model;
 		return 0;
 	}
-	LM_ERR("erlang_call takes exactly 4 parameters.\n");
+	LM_ERR("erlang_call_route takes exactly 4 parameters.\n");
 	return -1;
 }
 
-int cmd_erlang_call(struct sip_msg* msg, char *cn, char *rp, char *ar, char *_ret_pv) {
+int cmd_erlang_call_route(struct sip_msg* msg, char *cn , char *rp, char *ar, char *_ret_pv) {
 #define AVP_PRINTBUF_SIZE 1024
 	static char printbuf[AVP_PRINTBUF_SIZE];
-	int printbuf_len, bytessent;
+	static char routename[MAXATOMLEN];
+	int printbuf_len, bytessent, status, i, j;
 	ei_x_buff argbuf;
 	struct nodes_list* node;
 	struct erlang_cmd *erl_cmd;
 	erlang_pid erl_pid;
 	erlang_ref ref;
-	str conname, regproc;
-	str ret;
+	str conname, regproc, ret;
+	struct run_act_ctx ra_ctx;
 	int retcode = -1;
 
 	if(msg==NULL) {
-	    LM_ERR("cmd_erlang_call: received null msg\n");
+	    LM_ERR("cmd_erlang_call_route: received null msg\n");
 	    return -1;
 	}
 	if(fixup_get_svalue(msg, (gparam_p)cn, &conname)<0) {
-	    LM_ERR("cmd_erlang_call: cannot get the connection name\n");
+	    LM_ERR("cmd_erlang_call_route: cannot get the connection name\n");
 	    return -1;
 	}
 	for(node=nodes_lst;node;node=node->next) {
-		LM_DBG("cmd_erlang_call: matching %s with %.*s\n",node->name,conname.len,conname.s);
+		LM_DBG("cmd_erlang_call_route: matching %s with %.*s\n",node->name,conname.len,conname.s);
 		if(strcmp(node->name, conname.s)==0) break;
 	}
 	if(node==0){
-		LM_ERR("cmd_erlang_call: no such connection %.*s\n",conname.len,conname.s);
+		LM_ERR("cmd_erlang_call_route: no such connection %.*s\n",conname.len,conname.s);
 		return -1;
 	}
 
 	if(fixup_get_svalue(msg, (gparam_p)rp, &regproc)<0) {
-	    LM_ERR("cmd_erlang_call: cannot get the registered proc name\n");
+	    LM_ERR("cmd_erlang_call_route: cannot get the registered proc name\n");
 	    return -1;
 	}
+
 	printbuf_len = AVP_PRINTBUF_SIZE-1;
 	if(pv_printf(msg, (pv_elem_p)ar, printbuf, &printbuf_len)<0 || printbuf_len<=0)
 	{
-		LM_ERR("erlang_cmd_call: cannot expand args expression.\n");
+		LM_ERR("erlang_cmd_call_route: cannot expand args expression.\n");
 		return -1;
 	}
 
@@ -102,7 +104,7 @@ int cmd_erlang_call(struct sip_msg* msg, char *cn, char *rp, char *ar, char *_re
 	    goto error;
 	}
 
-	LM_DBG("cmd_erlang_call:  %.*s %.*s %.*s\n",conname.len,conname.s,
+	LM_DBG("cmd_erlang_call_route:  %.*s %.*s %.*s\n",conname.len,conname.s,
 			regproc.len,regproc.s, printbuf_len,printbuf);
 
 	erl_cmd->cmd=ERLANG_CALL;
@@ -153,8 +155,31 @@ int cmd_erlang_call(struct sip_msg* msg, char *cn, char *rp, char *ar, char *_re
 	argbuf.buff=erl_cmd->erlbuf;
 	argbuf.buffsz=erl_cmd->erlbuf_len;
 	argbuf.index=erl_cmd->decode_index;
+
+	//we have a two element tuple here
+	ei_decode_tuple_header(argbuf.buff, &(argbuf.index), &i);
+	//first element should be atom we can add check here
+	ei_get_type(argbuf.buff, &(argbuf.index), &i, &j);
+	ei_decode_atom(argbuf.buff, &(argbuf.index), routename);
+	//second element is put to ret_pv wihout bothering what is it
 	fill_retpv(erl_cmd->ret_pv,&argbuf,&(argbuf.index));
-	retcode=1;
+
+	//execute route
+	erl_cmd->route_no=route_get(&main_rt, routename);
+	if (erl_cmd->route_no==-1){
+	    ERR("node_receive: failed to fix route \"%s\": route_get() failed\n",routename);
+	    return -1;
+	}
+	if (main_rt.rlist[erl_cmd->route_no]==0){
+	    WARN("node_receive: route \"%s\" is empty / doesn't exist\n", routename);
+	}
+	init_run_actions_ctx(&ra_ctx);
+	i=run_actions(&ra_ctx, main_rt.rlist[erl_cmd->route_no], msg);
+	if (i < 0) {
+	    LM_ERR("erlang_call_route: run_actions failed (%d)\n",i);
+	    goto error;
+	}
+	retcode=(call_route_exit)?0:1;;
 error:
 	if(erl_cmd) {
 	    if(erl_cmd->ret_pv) shm_free(erl_cmd->ret_pv);

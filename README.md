@@ -10,19 +10,24 @@ With this module You can:
 
 Dependencies
 ------------
-* Erlang. I have release R15B01.
+* Erlang. I have release R16B01.
   To compile module You need erl_interface library usualy packaged in erlang-dev.
 
 Quickstart
 ----------
 
-Start erlang node using `erl -setcookie cookie -sname test`
-execute following on erlang console:
-```erlang
-register(console,self()).
-dbg:tracer().
-dbg:p(console,m).
-dbg:p(rex,m).
+Go to erlang directory and do `make`. This will download rebar, then some addidional
+erlang applications to deps folder and then compile sample app.
+Start it with `./start.sh`
+
+Start Kamailio with example config in aother console and  use sipsak to send sip messages
+and watch log on erlang console.
+```sh
+sipsak -v -s sip:echo@localhost
+sipsak -v -s sip:rpc@localhost
+sipsak -v -s sip:rpc2@localhost
+sipsak -v -s sip:whatever@localhost
 ```
-Start Kamailio with example config,  use sipsak to send sip messages, and watch message trace on erlang console 
+Sample erlang application is just simple echoing gen_server.
+Logs on console and in log files are done by `lager`,
 

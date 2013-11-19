@@ -3,7 +3,6 @@
 
 #include "../../counters.h"
 #include "../../mem/shm_mem.h"
-#include "../../modules/tm/tm_load.h"
 #include <erl_interface.h>
 #include <ei_connect.h>
 #include <ei.h>
@@ -23,8 +22,7 @@ struct erlang_counters_h {
 };
 extern struct globals_t *globals;
 extern struct erlang_counters_h erlang_cnts_h;
-extern struct tm_binds tm_api;
 extern int pipe_fds[2];
-extern struct tm_binds tm_api;
+extern int call_route_exit;
 /** @} */
 #endif /* _ERLANG_MOD_H */
