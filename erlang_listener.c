@@ -51,6 +51,8 @@ void child_loop(int data_pipe)
 	    continue;
 	}
 	for(node=nodes_lst; node; node=node->next){
+	    if(node->fd<=0) //skip disconected nodes
+	        continue;		
 	    if(FD_ISSET(node->fd, &fdset)) {
 		node_receive(node);
 	    }
