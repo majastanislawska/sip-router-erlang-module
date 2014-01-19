@@ -14,6 +14,8 @@
 #include "db_erlang_mod.h"
 #include "db_erlang_srdb1.h"
 
+extern struct erlang_binds erl_bind;
+
 /**
  * Store the name of table that will be used by subsequent database functions
  * \param _h database handle
@@ -117,6 +119,9 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 	ei_x_buff argbuf;
 	int i;
 	char *pbuf;
+	static str con=STR_STATIC_INIT("con1");
+	static str regname=STR_STATIC_INIT("echo_server");
+
 	
 	LM_DBG("erlang_srdb1_query %p %p\n",_r, *_r);
 	if (!_h || !_r) {
@@ -126,24 +131,7 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 	*_r=NULL;
 	LM_DBG("erlang_srdb1_query table %.*s\n",CON_TABLE(_h)->len, CON_TABLE(_h)->s);
 	ei_x_new(&argbuf);
-	// gen_call is 3-element tuple, first is atom $gen_call,
-	// second is {pid,ref} tuple and third is user data.
-	ei_x_encode_tuple_header(&argbuf, 3);
-	ei_x_encode_atom(&argbuf, "$gen_call");
-	ei_x_encode_tuple_header(&argbuf, 2);
-	// we are hacking erlang pid so we can have worker system pid here
-//	memcpy(&erl_pid,ei_self(&(node->ec)),sizeof(erlang_pid));
-//	erl_pid.num=getpid();
-//	ei_x_encode_pid(&argbuf, &erl_pid);
-	ei_x_encode_atom(&argbuf,"pid");
-//	utils_mk_ref(&(node->ec),&ref);
-//	ei_x_encode_ref(&argbuf, &ref);
-	ei_x_encode_atom(&argbuf,"ref");
-//	erl_cmd->refn0=ref.n[0];
-//	erl_cmd->refn1=ref.n[1];
-//	erl_cmd->refn2=ref.n[2];
-
-	//so much for pid, now encode tuple {db_op, table, [cols], [params]}
+	//encode tuple {db_op, table, [cols], [params]}
 	ei_x_encode_tuple_header(&argbuf, 5);
 //	switch(cmd->type) {
 //	    case DB_PUT: ei_x_encode_atom(&argbuf,"db_put"); break;
@@ -228,7 +216,8 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 	ei_s_print_term(&pbuf, argbuf.buff, &i);
 	LM_DBG("message is pbuf='%s' buf.buffsz=%d buf.index=%d i=%d\n", pbuf, argbuf.buffsz,argbuf.index,i );
 	pkg_free(pbuf);
-	
+	erl_bind.do_erlang_call(&con,&regname, &argbuf, NULL);
+	ei_x_free(&argbuf);
 	return 0;
 }
 

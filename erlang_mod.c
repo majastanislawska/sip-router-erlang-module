@@ -1,11 +1,12 @@
-#include "erlang_mod.h"
-#include "erlang_cmd.h"
-#include "erlang_listener.h"
-
 #include "../../sr_module.h"
 #include "../../cfg/cfg_struct.h"
 #include "../../shm_init.h"
 #include "../../dprint.h"
+
+#include "erlang_mod.h"
+#include "erlang_cmd.h"
+#include "erlang_listener.h"
+#include "api.h"
 
 //global vars
 struct globals_t *globals=0;
@@ -57,6 +58,8 @@ static cmd_export_t cmds[] = {
 	{"erlang_call", (cmd_function)cmd_erlang_call, 4, fixup_cmd_erlang_call, ANY_ROUTE},
 	{"erlang_call_route", (cmd_function)cmd_erlang_call_route, 4, fixup_cmd_erlang_call_route, ANY_ROUTE},
 	{"erlang_rex",  (cmd_function)cmd_erlang_rex, 5, fixup_cmd_erlang_rex, ANY_ROUTE},
+	
+	{ "erlang_bind", (cmd_function)erlang_bind, NO_SCRIPT, 0, 0},
 	{0, 0, 0, 0, 0}
 };
 /*
@@ -189,4 +192,14 @@ static void free_node (struct nodes_list *node) {
 		shm_free(node);
 	}
 	return;
+}
+int erlang_bind(erlang_api_t *erl) {
+	DBG("erlang_bind: starting :%p\n",erl);
+	if (erl == NULL) {
+		LM_WARN("erlang_bind: Cannot load API into a NULL pointer\n");
+		return -1;
+	}
+	erl->do_erlang_call = do_erlang_call;
+	DBG("erlang_bind: ending:%p %p \n",erl, erl->do_erlang_call);
+	return 0;
 }

@@ -55,5 +55,8 @@ void utils_mk_ref(ei_cnode* ec, erlang_ref* ref);
 struct erlang_cmd *find_pending_by_pid(unsigned int num,unsigned int serial);
 struct erlang_cmd *find_pending_by_ref(unsigned int n0, unsigned int n1, unsigned int n2);
 void fill_retpv(pv_spec_t *dst, ei_x_buff *buf ,int *decode_index);
+
+int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, char *_ret_pv);
+
 /** @} */
 #endif 

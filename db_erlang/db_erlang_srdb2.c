@@ -1,8 +1,8 @@
 #include "db_erlang_mod.h"
 #include "db_erlang_srdb2.h"
-//#include "erlang_cmd.h"
-//#include "erlang_listener.h"
 #include "../../dprint.h"
+
+extern struct erlang_binds erl_bind;
 
 int erlang_srdb2_ctx(db_ctx_t* ctx) {
 	LM_DBG("erlang_srdb2_ctx %p %*s, %d\n",ctx,ctx->id.len,ctx->id.s, ctx->con_n);
@@ -62,31 +62,16 @@ int erlang_srdb2_cmd_exec(db_res_t* res, db_cmd_t* cmd) {
 	ei_x_buff argbuf;
 	int i,cnt;
 	char *pbuf;
-	
+	static str con=STR_STATIC_INIT("con1");
+	static str regname=STR_STATIC_INIT("echo_server");
+
 	LM_DBG("erlang_srdb2_cmd %p\n",cmd);
 //	for(i = 0, fld = cmd->vals; !DB_FLD_EMPTY(fld) && !DB_FLD_LAST(fld[i]); i++) {
 //		rv |= sb_add(&sql_buf, set_str(&tmpstr, fld[i].name));
 //		if (!DB_FLD_LAST(fld[i + 1])) rv |= sb_add(&sql_buf, set_str(&tmpstr, ","));
 //	}
 	ei_x_new(&argbuf);
-	// gen_call is 3-element tuple, first is atom $gen_call,.
-	// second is {pid,ref} tuple and third is user data.
-	ei_x_encode_tuple_header(&argbuf, 3);
-	ei_x_encode_atom(&argbuf, "$gen_call");
-	ei_x_encode_tuple_header(&argbuf, 2);
-	// we are hacking erlang pid so we can have worker system pid here
-//	memcpy(&erl_pid,ei_self(&(node->ec)),sizeof(erlang_pid));
-//<---->erl_pid.num=getpid();
-//	ei_x_encode_pid(&argbuf, &erl_pid);
-	ei_x_encode_atom(&argbuf,"pid");
-//	utils_mk_ref(&(node->ec),&ref);
-//	ei_x_encode_ref(&argbuf, &ref);
-	ei_x_encode_atom(&argbuf,"ref");
-//	erl_cmd->refn0=ref.n[0];
-//	erl_cmd->refn1=ref.n[1];
-//	erl_cmd->refn2=ref.n[2];
-	
-	//so much for pid, now encode tuple {db_op, table, [cols], [params]}
+	//encode tuple {db_op, table, [cols], [params]}
 	ei_x_encode_tuple_header(&argbuf, 5);
 	switch(cmd->type) {
 	    case DB_PUT: ei_x_encode_atom(&argbuf,"db_put"); break;
@@ -145,7 +130,8 @@ int erlang_srdb2_cmd_exec(db_res_t* res, db_cmd_t* cmd) {
 	ei_s_print_term(&pbuf, argbuf.buff, &i);
 	LM_DBG("message is pbuf='%s' buf.buffsz=%d buf.index=%d i=%d\n", pbuf, argbuf.buffsz,argbuf.index,i );
 	pkg_free(pbuf);
-	
+	erl_bind.do_erlang_call(&con,&regname, &argbuf, NULL);
+	ei_x_free(&argbuf);
 	return 0;
 };
 

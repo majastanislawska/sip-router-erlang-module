@@ -1,5 +1,6 @@
 #include "erlang_mod.h"
 #include "erlang_cmd.h"
+#include "erlang_listener.h"
 #include "../../lvalue.h"
 
 /* stolen from erts/emulator/beam/erl_term.h */
@@ -79,4 +80,112 @@ void fill_retpv(pv_spec_t *dst, ei_x_buff *buf ,int *decode_index) {
     val.flags = PV_VAL_STR;
     dst->setf(0, &dst->pvp, (int)EQ_T, &val);
     pkg_free(pbuf);
+}
+
+int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, char *_ret_pv) {
+#define AVP_PRINTBUF_SIZE 1024
+    struct nodes_list* node;
+    struct erlang_cmd *erl_cmd;
+    ei_x_buff argbuf;
+    erlang_pid erl_pid;
+    erlang_ref ref;
+    int i,bytessent,retcode;
+    char *pbuf= NULL;
+
+    for(node=nodes_lst;node;node=node->next) {
+	LM_DBG("do_erlang_call: matching %s with %.*s\n",node->name,conname->len,conname->s);
+	if(strcmp(node->name, conname->s)==0) break;
+    }
+    if(node==0){
+	LM_ERR("do_erlang_call: no such connection %.*s\n",conname->len,conname->s);
+	return -1;
+    }
+    erl_cmd=shm_malloc(sizeof(struct erlang_cmd));
+    if(!erl_cmd) {
+	LM_ERR("no shm");
+	return -1;
+    }
+    memset(erl_cmd,0,sizeof(struct erlang_cmd));
+
+
+    if(lock_init(&(erl_cmd->lock))==NULL) {
+	LM_ERR("cannot init the lock\n");
+	goto error;
+    }
+    erl_cmd->reg_name=shm_strdup(regproc);
+    if (!erl_cmd->reg_name) {
+	LM_ERR("no shm memory\n\n");
+	goto error;
+    }
+    LM_DBG("do_erlang_call:  %.*s %.*s\n",conname->len,conname->s,
+		regproc->len,regproc->s);
+    erl_cmd->cmd=ERLANG_CALL;
+    erl_cmd->node=node;
+    ei_x_new(&argbuf);
+    ei_x_encode_version(&argbuf);
+    // gen_call is 3-element tuple, first is atom $gen_call,.
+    // second is {pid,ref} tuple and third is user data.
+    ei_x_encode_tuple_header(&argbuf, 3);
+    ei_x_encode_atom(&argbuf, "$gen_call");
+    ei_x_encode_tuple_header(&argbuf, 2);
+    // we are hacking erlang pid so we can have worker system pid here
+    memcpy(&erl_pid,ei_self(&(node->ec)),sizeof(erlang_pid));
+    ei_x_encode_pid(&argbuf, &erl_pid);
+    utils_mk_ref(&(node->ec),&ref);
+    ei_x_encode_ref(&argbuf, &ref);
+    erl_cmd->refn0=ref.n[0];
+    erl_cmd->refn1=ref.n[1];
+    erl_cmd->refn2=ref.n[2];
+
+    i=1;
+    ei_s_print_term(&pbuf, argbuf.buff, &i);
+    LM_DBG("argbuf is pbuf='%s' buf.buffsz=%d buf.index=%d i=%d\n", pbuf, argbuf.buffsz,argbuf.index,i );
+    i=0;
+    ei_s_print_term(&pbuf, payload->buff, &i);
+    LM_DBG("payload is pbuf='%s' buf.buffsz=%d buf.index=%d i=%d\n", pbuf, payload->buffsz,payload->index,i );
+
+    ei_x_append(&argbuf, payload);
+    erl_cmd->erlbuf_len=argbuf.index;
+    erl_cmd->erlbuf=shm_malloc(argbuf.index);
+    if (!erl_cmd->erlbuf) {
+	LM_ERR("no shm memory\n\n");
+	goto error;
+    }
+    memcpy(erl_cmd->erlbuf,argbuf.buff,argbuf.index);
+    ei_x_free(&argbuf);
+
+    i=1;
+    ei_s_print_term(&pbuf, erl_cmd->erlbuf, &i);
+    LM_DBG("message is pbuf='%s' buf.buffsz=%d buf.index=%d i=%d\n", pbuf, argbuf.buffsz,argbuf.index,i );
+    free(pbuf);
+
+    lock_get(&(erl_cmd->lock));
+    bytessent=write(pipe_fds[1], &erl_cmd, sizeof(erl_cmd));
+    LM_DBG("do_erlang_call: locked, sent %d  %d %s %d %p %p, waiting for release\n",bytessent,
+			erl_cmd->cmd,erl_cmd->reg_name,erl_cmd->erlbuf_len,erl_cmd->erlbuf, erl_cmd);
+    lock_get(&(erl_cmd->lock));
+    LM_DBG("after lock\n");
+    if (erl_cmd->retcode <0) {
+	retcode=erl_cmd->retcode;
+	LM_DBG("cmd_erlang_call: failed %d\n",retcode);
+	goto error;
+    }
+    //reuse
+    argbuf.buff=erl_cmd->erlbuf;
+    argbuf.buffsz=erl_cmd->erlbuf_len;
+    argbuf.index=erl_cmd->decode_index;
+    fill_retpv(erl_cmd->ret_pv,&argbuf,&(argbuf.index));
+    retcode=1;
+    return retcode;
+
+error:
+    if(erl_cmd) {
+	if(erl_cmd->ret_pv) shm_free(erl_cmd->ret_pv);
+	if(erl_cmd->erlbuf) shm_free(erl_cmd->erlbuf);
+	if(erl_cmd->reg_name) shm_free(erl_cmd->reg_name);
+	shm_free(erl_cmd);
+    }
+    ei_x_free(&argbuf);
+    return retcode;
+
 }

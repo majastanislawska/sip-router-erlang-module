@@ -5,6 +5,7 @@
 #include <erl_interface.h>
 #include <ei_connect.h>
 #include <ei.h>
+#include "../erlang/api.h"
 
 /* counter struct
 */

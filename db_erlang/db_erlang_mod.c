@@ -91,6 +91,7 @@ struct kam_module_exports kam_exports = {
 	kam_db_erlang_child_init   /* per-child init function */
 };
 
+struct erlang_binds erl_bind;
 
 int mod_register(char *path, int *dlflags, void *p1, void *p2)
 {
@@ -100,6 +101,7 @@ int mod_register(char *path, int *dlflags, void *p1, void *p2)
 }
 static int db_erlang_mod_init(void)
 {
+	erlang_load_api(&erl_bind);
 	LM_DBG("db_erlang_mod_init - calling kam_relang_mod_init\n");
 	return kam_db_erlang_mod_init();
 }
