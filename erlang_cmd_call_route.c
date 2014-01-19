@@ -35,13 +35,13 @@ int cmd_erlang_call_route(struct sip_msg* msg, char *cn , char *rp, char *ar, ch
 #define AVP_PRINTBUF_SIZE 1024
 	static char printbuf[AVP_PRINTBUF_SIZE];
 	static char routename[MAXATOMLEN];
-	int printbuf_len, bytessent, status, i, j;
+	int printbuf_len, bytessent, i, j;
 	ei_x_buff argbuf;
 	struct nodes_list* node;
 	struct erlang_cmd *erl_cmd;
 	erlang_pid erl_pid;
 	erlang_ref ref;
-	str conname, regproc, ret;
+	str conname, regproc;
 	struct run_act_ctx ra_ctx;
 	int retcode = -1;
 

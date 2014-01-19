@@ -112,7 +112,7 @@ static int db_erlang_child_init(int rank)
 {
 //	LM_DBG("db_erlang_child_init \n");
 	LM_DBG("erlang_modinit - calling kam_relang_mod_init\n");
-	return kam_db_erlang_child_init();
+	return kam_db_erlang_child_init(rank);
 	return 0;
 }
 int kam_db_erlang_child_init(int rank)

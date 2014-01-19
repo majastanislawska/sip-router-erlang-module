@@ -35,9 +35,7 @@ int cmd_erlang_cast(struct sip_msg* msg, char *cn, char *rp, char *ar) {
 	ei_x_buff argbuf;
 	struct nodes_list* node;
 	struct erlang_cmd *erl_cmd;
-	erlang_pid erl_pid;
 	str conname, regproc;
-	str ret;
 	int retcode = -1;
 
 	if(msg==NULL) {

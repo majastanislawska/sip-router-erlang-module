@@ -134,8 +134,7 @@ void node_receive(struct nodes_list *node)
     char *pbuf= NULL;
     char name[MAXATOMLEN];
     int i=0,j=0, decode_index=0;
-    struct erlang_cmd **cmd_p, *current_cmd;
-    erlang_pid pid;
+    struct erlang_cmd *current_cmd;
     erlang_ref ref;
     erlang_msg msg;
     ei_x_buff buf;

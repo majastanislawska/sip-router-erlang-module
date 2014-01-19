@@ -114,9 +114,8 @@ void erlang_srdb1_close(db1_con_t* _h)
 int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _op,
 	     const db_val_t* _v, const db_key_t* _c, const int _n, const int _nc,
 	     const db_key_t _o, db1_res_t** _r) {
-	void *tmp=0;
 	ei_x_buff argbuf;
-	int i,j,cnt;
+	int i;
 	char *pbuf;
 	
 	LM_DBG("erlang_srdb1_query %p %p\n",_r, *_r);
@@ -416,7 +415,7 @@ int erlang_srdb1_update(const db1_con_t* _h, const db_key_t* _k, const db_op_t* 
  * \param _n number of key=value pairs
  * \return zero on success, negative value on failure
  */
-int erlang_srdb1_replace(const db1_con_t* _h, const db_key_t* _k, const db_val_t* _v, const int _n)
+int erlang_srdb1_replace(const db1_con_t* _h, const db_key_t* _k, const db_val_t* _v, const int _n, const int _m)
 {
 //	return db_do_replace(_h, _k, _v, _n, db_mysql_val2str,
 //	db_mysql_submit_query);

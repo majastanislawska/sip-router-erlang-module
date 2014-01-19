@@ -37,7 +37,6 @@ int cmd_erlang_info(struct sip_msg* msg, char *cn, char *rp, char *ar) {
 	struct erlang_cmd *erl_cmd;
 	erlang_pid erl_pid;
 	str conname, regproc;
-	str ret;
 	int retcode = -1;
 
 	if(msg==NULL) {

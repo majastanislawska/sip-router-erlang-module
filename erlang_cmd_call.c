@@ -41,7 +41,6 @@ int cmd_erlang_call(struct sip_msg* msg, char *cn, char *rp, char *ar, char *_re
 	erlang_pid erl_pid;
 	erlang_ref ref;
 	str conname, regproc;
-	str ret;
 	int retcode = -1;
 
 	if(msg==NULL) {

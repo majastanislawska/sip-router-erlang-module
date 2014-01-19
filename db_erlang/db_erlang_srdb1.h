@@ -34,7 +34,7 @@ int erlang_srdb1_update(const db1_con_t* _h, const db_key_t* _k, const db_op_t* 
 	const db_val_t* _v, const db_key_t* _uk, const db_val_t* _uv, const int _n,
 	const int _un);
 
-int erlang_srdb1_replace(const db1_con_t* handle, const db_key_t* keys, const db_val_t* vals, const int n);
+int erlang_srdb1_replace(const db1_con_t* handle, const db_key_t* keys, const db_val_t* vals, const int n, const int _m);
 
 int erlang_srdb1_last_inserted_id(const db1_con_t* _h);
 
