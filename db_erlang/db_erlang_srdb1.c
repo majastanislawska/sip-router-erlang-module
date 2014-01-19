@@ -98,7 +98,85 @@ void erlang_srdb1_close(db1_con_t* _h)
 	db_do_close(_h, erlang_srdb1_free_connection);
 }
 
+int srdb1_encode_kv(int tupsize,const db_key_t* _k, const db_op_t* _op, const db_val_t* _v,
+				const int _n, ei_x_buff *argbuf) {
+	int i;
 
+	if(_k) {
+	    ei_x_encode_list_header(argbuf, _n);
+	    for(i = 0; i < _n; i++) {
+		db_val_t *vv;
+		ei_x_encode_tuple_header(argbuf, tupsize);
+		ei_x_encode_atom_len(argbuf,_k[i]->s,_k[i]->len);
+		if(tupsize == 3 ) {
+		    if (_op) {
+			ei_x_encode_atom(argbuf,_op[i]);
+		    } else {
+			ei_x_encode_atom(argbuf,"=");
+		    }
+		}
+		vv=&(_v[i]);
+		if (VAL_NULL(vv)) {
+		    ei_x_encode_atom(argbuf,"undefined");
+		} else {
+		    switch(VAL_TYPE(vv)) {
+			case DB1_INT:
+			    ei_x_encode_ulong(argbuf, VAL_INT(vv));
+			    break;
+			case DB1_BIGINT:
+			    ei_x_encode_longlong(argbuf, VAL_BIGINT(vv));
+			    break;
+			case DB1_DOUBLE:
+			    ei_x_encode_double(argbuf, VAL_DOUBLE(vv));
+			    break;
+			case DB1_STRING:
+			    ei_x_encode_string(argbuf,VAL_STRING(vv));
+			    break;
+			case DB1_STR:
+			    ei_x_encode_string_len(argbuf,VAL_STR(vv).s,VAL_STR(vv).len);
+			    break;
+//			case DB1_DATETIME: 
+//			    ei_x_encode_string(argbuf,);
+//			    break;
+//			case DB1_BLOB:
+//			    ei_x_encode_binary(argbuf,VAL_BLOB(vv));
+//			    break;
+//			case DB1_BITMAP:
+//			    ei_x_encode_binary(argbuf,&VAL_BITMAP(vv));
+//			    break;
+		    }
+		}
+	    }
+	    ei_x_encode_empty_list(argbuf);
+	} else {
+	    ei_x_encode_list_header(argbuf, 0);
+	}
+	return 0;
+}
+int srdb1_encode_k(const db_key_t* _k, const db_op_t* _op, const db_val_t* _v,
+				const int _n, ei_x_buff *argbuf) {
+	return srdb1_encode_kv(3, _k, _op, _v, _n, argbuf);
+}
+
+int srdb1_encode_v(const db_key_t* _k, const db_val_t* _v,
+				const int _n, ei_x_buff *argbuf) {
+	return srdb1_encode_kv(2, _k, NULL, _v, _n, argbuf);
+}
+
+int srdb1_encode_c(const db_key_t* _c, const int _nc, ei_x_buff *argbuf){
+	int i;
+
+	if(_c) {
+	    ei_x_encode_list_header(argbuf, _nc);
+	    for(i = 0; i < _nc; i++) {
+		ei_x_encode_atom_len(argbuf,_c[i]->s,_c[i]->len);
+	    }
+	    ei_x_encode_empty_list(argbuf);
+	} else {
+	    ei_x_encode_atom(argbuf,"all");
+	}
+	return 0;
+}
 
 /**
  * Query a table for specified rows.
@@ -117,8 +195,6 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 	     const db_val_t* _v, const db_key_t* _c, const int _n, const int _nc,
 	     const db_key_t _o, db1_res_t** _r) {
 	ei_x_buff argbuf;
-	int i;
-	char *pbuf=NULL;
 	static str con=STR_STATIC_INIT("con1");
 	static str regname=STR_STATIC_INIT("echo_server");
 
@@ -133,88 +209,14 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 	ei_x_new(&argbuf);
 	//encode tuple {db_op, table, [cols], [params]}
 	ei_x_encode_tuple_header(&argbuf, 5);
-//	switch(cmd->type) {
-//	    case DB_PUT: ei_x_encode_atom(&argbuf,"db_put"); break;
-//	    case DB_DEL: ei_x_encode_atom(&argbuf,"db_del"); break;
-//	    case DB_GET: ei_x_encode_atom(&argbuf,"db_get"); break;
-//	    case DB_UPD: ei_x_encode_atom(&argbuf,"db_upd"); break;
-//	    case DB_SQL: ei_x_encode_atom(&argbuf,"db_sql"); break;
-//	}
-	ei_x_encode_atom(&argbuf,"db_get");
+	ei_x_encode_atom(&argbuf,"select");
 	ei_x_encode_atom_len(&argbuf,CON_TABLE(_h)->s,CON_TABLE(_h)->len);
 
-	if(_c) {
-	    ei_x_encode_list_header(&argbuf, _nc);
-	    for(i = 0; i < _nc; i++) {
-		ei_x_encode_atom_len(&argbuf,_c[i]->s,_c[i]->len);
-	    }
-	    ei_x_encode_empty_list(&argbuf);
-	} else {
-	    ei_x_encode_atom(&argbuf,"all");
-	}
-	if(_k) {
-	    ei_x_encode_list_header(&argbuf, _n);
-	    for(i = 0; i < _n; i++) {
-		db_val_t *vv;
-		ei_x_encode_tuple_header(&argbuf, 3);
-		ei_x_encode_atom_len(&argbuf,_k[i]->s,_k[i]->len);
-		if (_op) {
-		    ei_x_encode_atom(&argbuf,_op[i]);
-		} else {
-		    ei_x_encode_atom(&argbuf,"=");
-		}
-		vv=&(_v[i]);
-		switch(VAL_TYPE(vv)) {
-		    case DB1_INT:
-			ei_x_encode_ulong(&argbuf, VAL_INT(vv));
-			break;
-		    case DB1_BIGINT:
-			ei_x_encode_longlong(&argbuf, VAL_BIGINT(vv));
-			break;
-		    case DB1_DOUBLE:
-			ei_x_encode_double(&argbuf, VAL_DOUBLE(vv));
-			break;
-		    case DB1_STRING:
-			ei_x_encode_string(&argbuf,VAL_STRING(vv));
-			break;
-		    case DB1_STR:
-			ei_x_encode_string_len(&argbuf,VAL_STR(vv).s,VAL_STR(vv).len);
-			break;
-//		    case DB1_DATETIME: 
-//			ei_x_encode_string(&argbuf,);
-//			break;
-//		    case DB1_BLOB:
-//			ei_x_encode_binary(&argbuf,VAL_BLOB(vv));
-//			break;
-//		    case DB1_BITMAP:
-//			ei_x_encode_binary(&argbuf,&VAL_BITMAP(vv));
-//			 break;
-		}
-	    }
-	    ei_x_encode_empty_list(&argbuf);
-	} else {
-	    ei_x_encode_list_header(&argbuf, 0);
-	}
-//	if(cmd->vals) {
-//	    for(i = 0, fld = cmd->vals; !DB_FLD_LAST(fld[i]); i++) {}
-//	    ei_x_encode_list_header(&argbuf, i);
-//	    for(i = 0, fld = cmd->result; !DB_FLD_LAST(fld[i]); i++) {
-//		ei_x_encode_atom(&argbuf,fld[i].name);
-//	    }
-//	    ei_x_encode_empty_list(&argbuf);
-//	} else {
-	    ei_x_encode_list_header(&argbuf, 0);
-//	}
+	srdb1_encode_c(_c, _nc, &argbuf);
+	srdb1_encode_k(_k, _op, _v, _n, &argbuf);
+//	ei_x_encode_atom_len(&argbuf,_o->s,_o->len);
+	ei_x_encode_list_header(&argbuf, 0);
 
-//	if(ei_x_format_wo_ver(&argbuf, printbuf)!=0) {
-//		LM_ERR("cannot fromat erlang binary from arg string\n");
-//		goto error;
-//	}
-
-	i=0;
-	ei_s_print_term(&pbuf, argbuf.buff, &i);
-	LM_DBG("message is pbuf='%s' buf.buffsz=%d buf.index=%d i=%d\n", pbuf, argbuf.buffsz,argbuf.index,i );
-	free(pbuf);pbuf=NULL;
 	erl_bind.do_erlang_call(&con,&regname, &argbuf, NULL);
 	ei_x_free(&argbuf);
 	return 0;
@@ -343,11 +345,30 @@ int erlang_srdb1_raw_query(const db1_con_t* _h, const str* _s, db1_res_t** _r)
  * \param _n number of key=value pairs
  * \return zero on success, negative value on failure
  */
-int erlang_srdb1_insert(const db1_con_t* _h, const db_key_t* _k, const db_val_t* _v, const int _n)
-{
-//	return db_do_insert(_h, _k, _v, _n, db_mysql_val2str,
-//	db_mysql_submit_query);
+int erlang_srdb1_insert(const db1_con_t* _h, const db_key_t* _k, const db_val_t* _v, const int _n) {
+	ei_x_buff argbuf;
+	static str con=STR_STATIC_INIT("con1");
+	static str regname=STR_STATIC_INIT("echo_server");
+
+	
 	LM_DBG("erlang_srdb1_insert\n");
+	if (!_h) {
+		LM_ERR("invalid parameter value\n");
+		return -1;
+	}
+	LM_DBG("erlang_srdb1_insert table %.*s\n",CON_TABLE(_h)->len, CON_TABLE(_h)->s);
+	ei_x_new(&argbuf);
+	//encode tuple {db_op, table, [cols], [keys], [vals]}
+	ei_x_encode_tuple_header(&argbuf, 5);
+	ei_x_encode_atom(&argbuf,"insert");
+	ei_x_encode_atom_len(&argbuf,CON_TABLE(_h)->s,CON_TABLE(_h)->len);
+
+	ei_x_encode_list_header(&argbuf, 0); //_c
+	ei_x_encode_list_header(&argbuf, 0); //_k
+	srdb1_encode_v(_k, _v, _n, &argbuf); //_v
+
+	erl_bind.do_erlang_call(&con,&regname, &argbuf, NULL);
+	ei_x_free(&argbuf);
 	return 0;
 }
 
@@ -362,11 +383,30 @@ int erlang_srdb1_insert(const db1_con_t* _h, const db_key_t* _k, const db_val_t*
  * \return zero on success, negative value on failure
  */
 int erlang_srdb1_delete(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _o,
-	const db_val_t* _v, const int _n)
-{
-//	return db_do_delete(_h, _k, _o, _v, _n, db_mysql_val2str,
-//	db_mysql_submit_query);
+		const db_val_t* _v, const int _n) {
+	ei_x_buff argbuf;
+	static str con=STR_STATIC_INIT("con1");
+	static str regname=STR_STATIC_INIT("echo_server");
+
+	
 	LM_DBG("erlang_srdb1_delete\n");
+	if (!_h) {
+		LM_ERR("invalid parameter value\n");
+		return -1;
+	}
+	LM_DBG("erlang_srdb1_delete table %.*s\n",CON_TABLE(_h)->len, CON_TABLE(_h)->s);
+	ei_x_new(&argbuf);
+	//encode tuple {db_op, table, [cols], [keys], [vals]}
+	ei_x_encode_tuple_header(&argbuf, 5);
+	ei_x_encode_atom(&argbuf,"delete");
+	ei_x_encode_atom_len(&argbuf,CON_TABLE(_h)->s,CON_TABLE(_h)->len);
+
+	ei_x_encode_list_header(&argbuf, 0); //_c
+	srdb1_encode_k(_k, _o, _v, _n, &argbuf); //_k
+	ei_x_encode_list_header(&argbuf, 0); //_v
+
+	erl_bind.do_erlang_call(&con,&regname, &argbuf, NULL);
+	ei_x_free(&argbuf);
 	return 0;
 }
 
@@ -385,13 +425,32 @@ int erlang_srdb1_delete(const db1_con_t* _h, const db_key_t* _k, const db_op_t* 
  */
 int erlang_srdb1_update(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _o, 
 	const db_val_t* _v, const db_key_t* _uk, const db_val_t* _uv, const int _n, 
-	const int _un)
-{
-//	return db_do_update(_h, _k, _o, _v, _uk, _uv, _n, _un, db_mysql_val2str,
-//	db_mysql_submit_query);
-	LM_DBG("erlang_srdb1_update\n");
-	return 0;
+	const int _un) {
 
+	ei_x_buff argbuf;
+	static str con=STR_STATIC_INIT("con1");
+	static str regname=STR_STATIC_INIT("echo_server");
+
+	
+	LM_DBG("erlang_srdb1_update\n");
+	if (!_h) {
+		LM_ERR("invalid parameter value\n");
+		return -1;
+	}
+	LM_DBG("erlang_srdb1_update table %.*s\n",CON_TABLE(_h)->len, CON_TABLE(_h)->s);
+	ei_x_new(&argbuf);
+	//encode tuple {db_op, table, [cols], [keys], [vals]}
+	ei_x_encode_tuple_header(&argbuf, 5);
+	ei_x_encode_atom(&argbuf,"update");
+	ei_x_encode_atom_len(&argbuf,CON_TABLE(_h)->s,CON_TABLE(_h)->len);
+
+	ei_x_encode_list_header(&argbuf, 0); //_c
+	srdb1_encode_k(_k, _o, _v, _n, &argbuf); //_k
+	srdb1_encode_v(_k, _v, _un, &argbuf); //_v
+
+	erl_bind.do_erlang_call(&con,&regname, &argbuf, NULL);
+	ei_x_free(&argbuf);
+	return 0;
 }
 
 
@@ -403,11 +462,32 @@ int erlang_srdb1_update(const db1_con_t* _h, const db_key_t* _k, const db_op_t* 
  * \param _n number of key=value pairs
  * \return zero on success, negative value on failure
  */
-int erlang_srdb1_replace(const db1_con_t* _h, const db_key_t* _k, const db_val_t* _v, const int _n, const int _m)
-{
-//	return db_do_replace(_h, _k, _v, _n, db_mysql_val2str,
-//	db_mysql_submit_query);
+int erlang_srdb1_replace(const db1_con_t* _h, const db_key_t* _k, 
+		const db_val_t* _v, const int _n, const int _m) {
+	ei_x_buff argbuf;
+	static str con=STR_STATIC_INIT("con1");
+	static str regname=STR_STATIC_INIT("echo_server");
+
+	
 	LM_DBG("erlang_srdb1_replace\n");
+	if (!_h) {
+		LM_ERR("invalid parameter value\n");
+		return -1;
+	}
+	LM_DBG("erlang_srdb1_replace table %.*s\n",CON_TABLE(_h)->len, CON_TABLE(_h)->s);
+	ei_x_new(&argbuf);
+	//encode tuple {db_op, table, [cols], [keys], [vals]}
+	ei_x_encode_tuple_header(&argbuf, 5);
+	ei_x_encode_atom(&argbuf,"replace");
+	ei_x_encode_atom_len(&argbuf,CON_TABLE(_h)->s,CON_TABLE(_h)->len);
+
+	ei_x_encode_list_header(&argbuf, 0); //_c
+	ei_x_encode_list_header(&argbuf, 0); //_k
+//	srdb1_encode_k(_k, NULL, _v, _n, &argbuf); //_k
+	srdb1_encode_v(_k, _v, _n, &argbuf); //_v
+
+	erl_bind.do_erlang_call(&con,&regname, &argbuf, NULL);
+	ei_x_free(&argbuf);
 	return 0;
 }
 
@@ -426,7 +506,7 @@ int erlang_srdb1_last_inserted_id(const db1_con_t* _h)
 	}
 //	return mysql_insert_id(CON_CONNECTION(_h));
 	LM_DBG("erlang_srdb1_last_inserted_id\n");
-	return -1;
+	return 0;
 
 }
 

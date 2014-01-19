@@ -74,11 +74,11 @@ int erlang_srdb2_cmd_exec(db_res_t* res, db_cmd_t* cmd) {
 	//encode tuple {db_op, table, [cols], [params]}
 	ei_x_encode_tuple_header(&argbuf, 5);
 	switch(cmd->type) {
-	    case DB_PUT: ei_x_encode_atom(&argbuf,"db_put"); break;
-	    case DB_DEL: ei_x_encode_atom(&argbuf,"db_del"); break;
-	    case DB_GET: ei_x_encode_atom(&argbuf,"db_get"); break;
-	    case DB_UPD: ei_x_encode_atom(&argbuf,"db_upd"); break;
-	    case DB_SQL: ei_x_encode_atom(&argbuf,"db_sql"); break;
+	    case DB_PUT: ei_x_encode_atom(&argbuf,"insert"); break;
+	    case DB_DEL: ei_x_encode_atom(&argbuf,"delete"); break;
+	    case DB_GET: ei_x_encode_atom(&argbuf,"select"); break;
+	    case DB_UPD: ei_x_encode_atom(&argbuf,"update"); break;
+	    case DB_SQL: ei_x_encode_atom(&argbuf,"rawquery"); break;
 	}
 	ei_x_encode_atom_len(&argbuf,cmd->table.s,cmd->table.len);
 	
@@ -119,11 +119,6 @@ int erlang_srdb2_cmd_exec(db_res_t* res, db_cmd_t* cmd) {
 	} else {
 	    ei_x_encode_list_header(&argbuf, 0);
 	}
-	
-//	if(ei_x_format_wo_ver(&argbuf, printbuf)!=0) {
-//		LM_ERR("cannot fromat erlang binary from arg string\n");
-//		goto error;
-//	}
 	
 	i=0;
 	ei_s_print_term(&pbuf, argbuf.buff, &i);
