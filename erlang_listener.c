@@ -161,11 +161,10 @@ void node_receive(struct nodes_list *node)
 		    ei_decode_version(buf.buff,&decode_index,&j);
 //debug 
 		    i=decode_index;
-		    pbuf=pkg_malloc(BUFSIZ);
 		    LM_DBG("node_receive: buf.index=%d decode_index=%d i=%d j=%d\n", buf.index, decode_index,i,j );
 		    ei_s_print_term(&pbuf, buf.buff, &i);
 		    LM_DBG("node_receive: message is pbuf='%s' buf.buffsz=%d buf.index=%d decode_index=%d i=%d j=%d\n", pbuf, buf.buffsz,buf.index, decode_index,i,j );
-		    pkg_free(pbuf);
+		    free(pbuf);pbuf=NULL;
 //end debug
 		    ei_get_type(buf.buff, &decode_index, &i, &j); //i is type, j is size
 		    LM_DBG("node_receive: buf.index=%d decode_index=%d i=%d j=%d\n", buf.index, decode_index,i,j );
@@ -188,11 +187,10 @@ void node_receive(struct nodes_list *node)
 					lock_release(&(current_cmd->lock));
 				    } else {
 					i=decode_index;
-					pbuf=pkg_malloc(BUFSIZ);
 					LM_DBG("node_receive: buf.index=%d decode_index=%d i=%d j=%d\n", buf.index, decode_index,i,j );
 					ei_s_print_term(&pbuf, buf.buff, &i);
 					LM_ERR("node_receive: Unexpected message  pbuf='%s' buf.index=%d decode_index=%d i=%d j=%d\n", pbuf, buf.index, decode_index,i,j );
-					pkg_free(pbuf);
+					free(pbuf);pbuf=NULL;
 				    }
 				} else {
 				    LM_ERR("Don't know how to handle msg with {%s,...}\n",name);
@@ -216,11 +214,10 @@ void node_receive(struct nodes_list *node)
 					lock_release(&(current_cmd->lock));
 				    }else {
 					i=decode_index;
-					pbuf=pkg_malloc(BUFSIZ);
 					LM_DBG("node_receive: buf.index=%d decode_index=%d i=%d j=%d\n", buf.index, decode_index,i,j );
 					ei_s_print_term(&pbuf, buf.buff, &i);
 					LM_ERR("node_receive: Unexpected message  pbuf='%s' buf.index=%d decode_index=%d i=%d j=%d\n", pbuf, buf.index, decode_index,i,j );
-					pkg_free(pbuf);
+					free(pbuf);pbuf=NULL;
 				    }
 				break;
 			    default:
@@ -239,10 +236,9 @@ void node_receive(struct nodes_list *node)
 		    ei_decode_version(buf.buff,&decode_index,&j);
 		    i=decode_index;
 //debug
-		    pbuf=pkg_malloc(BUFSIZ);
 		    ei_s_print_term(&pbuf, buf.buff, &i);
 		    LM_DBG("erl_send: message is '%s' %d %d %d\n", pbuf, buf.index, i,j );
-		    pkg_free(pbuf);
+		    free(pbuf);pbuf=NULL;
 //end debug
 		    break;
 		case ERL_LINK:

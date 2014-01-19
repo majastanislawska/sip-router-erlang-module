@@ -68,25 +68,20 @@ void fill_retpv(pv_spec_t *dst, ei_x_buff *buf ,int *decode_index) {
 	return;
     pv_value_t val;
     char *pbuf=NULL;
-    pbuf=pkg_malloc(BUFSIZ);
-    if (!pbuf) {
-	LM_ERR("no shm memory\n\n");
-	return;
-    }
     ei_s_print_term(&pbuf, buf->buff, decode_index);
     LM_DBG("fill_retpv: %s\n", pbuf);
     val.rs.s = pbuf;
     val.rs.len = strlen(pbuf);
     val.flags = PV_VAL_STR;
     dst->setf(0, &dst->pvp, (int)EQ_T, &val);
-    pkg_free(pbuf);
+    free(pbuf);
 }
 
 int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, char *_ret_pv) {
 #define AVP_PRINTBUF_SIZE 1024
     struct nodes_list* node;
     struct erlang_cmd *erl_cmd;
-    ei_x_buff argbuf;
+    ei_x_buff argbuf, retbuf;
     erlang_pid erl_pid;
     erlang_ref ref;
     int i,bytessent,retcode;
@@ -152,12 +147,11 @@ int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, char *_ret_pv
 	goto error;
     }
     memcpy(erl_cmd->erlbuf,argbuf.buff,argbuf.index);
-    ei_x_free(&argbuf);
 
     i=1;
     ei_s_print_term(&pbuf, erl_cmd->erlbuf, &i);
     LM_DBG("message is pbuf='%s' buf.buffsz=%d buf.index=%d i=%d\n", pbuf, argbuf.buffsz,argbuf.index,i );
-    free(pbuf);
+    free(pbuf);pbuf=NULL;
 
     lock_get(&(erl_cmd->lock));
     bytessent=write(pipe_fds[1], &erl_cmd, sizeof(erl_cmd));
@@ -170,13 +164,11 @@ int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, char *_ret_pv
 	LM_DBG("cmd_erlang_call: failed %d\n",retcode);
 	goto error;
     }
-    //reuse
-    argbuf.buff=erl_cmd->erlbuf;
-    argbuf.buffsz=erl_cmd->erlbuf_len;
-    argbuf.index=erl_cmd->decode_index;
-    fill_retpv(erl_cmd->ret_pv,&argbuf,&(argbuf.index));
+    retbuf.buff=erl_cmd->erlbuf;
+    retbuf.buffsz=erl_cmd->erlbuf_len;
+    retbuf.index=erl_cmd->decode_index;
+    fill_retpv(erl_cmd->ret_pv,&retbuf,&(retbuf.index));
     retcode=1;
-    return retcode;
 
 error:
     if(erl_cmd) {

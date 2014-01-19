@@ -61,7 +61,7 @@ int erlang_srdb2_cmd_exec(db_res_t* res, db_cmd_t* cmd) {
 	db_fld_t* fld;
 	ei_x_buff argbuf;
 	int i,cnt;
-	char *pbuf;
+	char *pbuf=NULL;
 	static str con=STR_STATIC_INIT("con1");
 	static str regname=STR_STATIC_INIT("echo_server");
 
@@ -126,10 +126,9 @@ int erlang_srdb2_cmd_exec(db_res_t* res, db_cmd_t* cmd) {
 //	}
 	
 	i=0;
-	pbuf=pkg_malloc(BUFSIZ);
 	ei_s_print_term(&pbuf, argbuf.buff, &i);
 	LM_DBG("message is pbuf='%s' buf.buffsz=%d buf.index=%d i=%d\n", pbuf, argbuf.buffsz,argbuf.index,i );
-	pkg_free(pbuf);
+	free(pbuf);pbuf=NULL;
 	erl_bind.do_erlang_call(&con,&regname, &argbuf, NULL);
 	ei_x_free(&argbuf);
 	return 0;
