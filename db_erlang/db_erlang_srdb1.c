@@ -31,42 +31,26 @@ int erlang_srdb1_use_table(db1_con_t* _h, const str* _t)
 //temporary
 void *erlang_srdb1_new_connection(const struct db_id* id) 
 {
-	void *ptr;
-//	int n = 0;
-//	char tmp[50];
-//	struct erl_con *con;
-	LM_DBG("erlang_srdb1_new_connection\n");
-	LM_DBG(" scheme   %s\n",id->scheme);
-	LM_DBG(" username %s\n",id->username);
-	LM_DBG(" password %s\n",id->password);
-	LM_DBG(" host %s\n",id->host);
-	LM_DBG(" port %i\n",id->port);
-	LM_DBG(" database %s\n",id->database);
-	LM_DBG(" pid %i\n",id->pid);
-	LM_DBG(" poolid %i\n",id->poolid);
-//	con=pkg_malloc(sizeof(struct erl_con));
-//	if (!con) {
-//		LM_DBG("erlang_srdb1_new_connection pgg_malloc failed\n");
-//		return 0;
-//	}
-//	if (ei_connect_init(&(con->ec), "kamailio", "cookie", n++) < 0) {
-//		LM_ERR("erlang_srdb1_new_connection ei_connect_init error\n");
-////		LM_ERR("erlang_srdb1_new_connection ei_connect_init error %d\n",erl_errno);
-//		pkg_free(con);
-//		return 0;
-//	}
-//	snprintf(tmp,50,"%s@%s",id->username,id->host);
-//	con->fd = ei_connect(&(con->ec), tmp);
-//	if(con->fd <0) {
-//		LM_ERR("erlang_srdb1_new_connection ei_connect error\n");
-////		LM_ERR("erlang_srdb1_new_connection ei_connect error %d\n",erl_errno);
-//		pkg_free(con);
-//		return 0;
-//	}
-//	LM_DBG(" erlang_srdb1_new_connection finishes successfully ec=%p fd=%d\n",&(con->ec),con->fd);
-	ptr=pkg_malloc(64);
-	LM_DBG("erlang_new_connection %p \n",ptr);
-	return ptr;
+	struct erlang_connection *con;
+
+	if (!id) {
+		LM_ERR("invalid parameter value\n");
+		return 0;
+	}
+	con=pkg_malloc(sizeof(struct erlang_connection));
+	if (!con) {
+		LM_DBG("erlang_srdb1_new_connection pkg_malloc failed\n");
+		return 0;
+	}
+	memset(con, 0, sizeof(*con));
+	con->hdr.ref = 1;
+	con->hdr.id = (struct db_id*)id;
+	con->con.s=id->host;
+	con->con.len=strlen(id->host);
+	con->regname.s=id->database;
+	con->regname.len=strlen(id->database);
+	LM_DBG("erlang_new_connection %p \n",con);
+	return con;
 }
 /**
  * Initialize the database module.
@@ -81,8 +65,9 @@ db1_con_t* erlang_srdb1_init(const str* _url)
 }
 
 //temporary
-void erlang_srdb1_free_connection(struct pool_con* con) {
+void erlang_srdb1_free_connection(struct erlang_connection* con) {
 	LM_DBG("erlang_free_connection %p \n",con);
+	free_db_id(con->hdr.id);
 	pkg_free(con);
 	return;
 }
@@ -195,8 +180,6 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 	     const db_val_t* _v, const db_key_t* _c, const int _n, const int _nc,
 	     const db_key_t _o, db1_res_t** _r) {
 	ei_x_buff argbuf;
-	static str con=STR_STATIC_INIT("con1");
-	static str regname=STR_STATIC_INIT("echo_server");
 
 	
 	LM_DBG("erlang_srdb1_query %p %p\n",_r, *_r);
@@ -217,7 +200,7 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 //	ei_x_encode_atom_len(&argbuf,_o->s,_o->len);
 	ei_x_encode_list_header(&argbuf, 0);
 
-	erl_bind.do_erlang_call(&con,&regname, &argbuf, NULL);
+	erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL);
 	ei_x_free(&argbuf);
 	return 0;
 }
@@ -347,10 +330,7 @@ int erlang_srdb1_raw_query(const db1_con_t* _h, const str* _s, db1_res_t** _r)
  */
 int erlang_srdb1_insert(const db1_con_t* _h, const db_key_t* _k, const db_val_t* _v, const int _n) {
 	ei_x_buff argbuf;
-	static str con=STR_STATIC_INIT("con1");
-	static str regname=STR_STATIC_INIT("echo_server");
 
-	
 	LM_DBG("erlang_srdb1_insert\n");
 	if (!_h) {
 		LM_ERR("invalid parameter value\n");
@@ -367,7 +347,7 @@ int erlang_srdb1_insert(const db1_con_t* _h, const db_key_t* _k, const db_val_t*
 	ei_x_encode_list_header(&argbuf, 0); //_k
 	srdb1_encode_v(_k, _v, _n, &argbuf); //_v
 
-	erl_bind.do_erlang_call(&con,&regname, &argbuf, NULL);
+	erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL);
 	ei_x_free(&argbuf);
 	return 0;
 }
@@ -385,10 +365,7 @@ int erlang_srdb1_insert(const db1_con_t* _h, const db_key_t* _k, const db_val_t*
 int erlang_srdb1_delete(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _o,
 		const db_val_t* _v, const int _n) {
 	ei_x_buff argbuf;
-	static str con=STR_STATIC_INIT("con1");
-	static str regname=STR_STATIC_INIT("echo_server");
 
-	
 	LM_DBG("erlang_srdb1_delete\n");
 	if (!_h) {
 		LM_ERR("invalid parameter value\n");
@@ -405,7 +382,7 @@ int erlang_srdb1_delete(const db1_con_t* _h, const db_key_t* _k, const db_op_t* 
 	srdb1_encode_k(_k, _o, _v, _n, &argbuf); //_k
 	ei_x_encode_list_header(&argbuf, 0); //_v
 
-	erl_bind.do_erlang_call(&con,&regname, &argbuf, NULL);
+	erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL);
 	ei_x_free(&argbuf);
 	return 0;
 }
@@ -428,10 +405,7 @@ int erlang_srdb1_update(const db1_con_t* _h, const db_key_t* _k, const db_op_t* 
 	const int _un) {
 
 	ei_x_buff argbuf;
-	static str con=STR_STATIC_INIT("con1");
-	static str regname=STR_STATIC_INIT("echo_server");
 
-	
 	LM_DBG("erlang_srdb1_update\n");
 	if (!_h) {
 		LM_ERR("invalid parameter value\n");
@@ -448,7 +422,7 @@ int erlang_srdb1_update(const db1_con_t* _h, const db_key_t* _k, const db_op_t* 
 	srdb1_encode_k(_k, _o, _v, _n, &argbuf); //_k
 	srdb1_encode_v(_k, _v, _un, &argbuf); //_v
 
-	erl_bind.do_erlang_call(&con,&regname, &argbuf, NULL);
+	erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL);
 	ei_x_free(&argbuf);
 	return 0;
 }
@@ -464,11 +438,9 @@ int erlang_srdb1_update(const db1_con_t* _h, const db_key_t* _k, const db_op_t* 
  */
 int erlang_srdb1_replace(const db1_con_t* _h, const db_key_t* _k, 
 		const db_val_t* _v, const int _n, const int _m) {
-	ei_x_buff argbuf;
-	static str con=STR_STATIC_INIT("con1");
-	static str regname=STR_STATIC_INIT("echo_server");
 
-	
+	ei_x_buff argbuf;
+
 	LM_DBG("erlang_srdb1_replace\n");
 	if (!_h) {
 		LM_ERR("invalid parameter value\n");
@@ -486,7 +458,7 @@ int erlang_srdb1_replace(const db1_con_t* _h, const db_key_t* _k,
 //	srdb1_encode_k(_k, NULL, _v, _n, &argbuf); //_k
 	srdb1_encode_v(_k, _v, _n, &argbuf); //_v
 
-	erl_bind.do_erlang_call(&con,&regname, &argbuf, NULL);
+	erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL);
 	ei_x_free(&argbuf);
 	return 0;
 }

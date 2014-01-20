@@ -2,12 +2,22 @@
 #define ERLANG_SRDB1_H
 
 #include "../../lib/srdb1/db.h"
+#include "../../lib/srdb1/db_pool.h"
 #include "../../lib/srdb1/db_con.h"
 #include "../../lib/srdb1/db_res.h"
 #include "../../lib/srdb1/db_key.h"
 #include "../../lib/srdb1/db_op.h"
 #include "../../lib/srdb1/db_val.h"
 #include "../../str.h"
+
+struct erlang_connection {
+	struct pool_con hdr;     /*! standard fields */
+
+	str con;
+	str regname;
+};
+
+#define CON_ERLANG(db_con)	((struct erlang_connection *) db_con->tail)
 
 int erlang_srdb1_use_table(db1_con_t* _h, const str* _t);
 
