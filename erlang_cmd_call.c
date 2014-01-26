@@ -40,33 +40,32 @@ int cmd_erlang_call(struct sip_msg* msg, char *cn, char *rp, char *ar, char *_re
 	struct erlang_cmd *erl_cmd;
 	erlang_pid erl_pid;
 	erlang_ref ref;
+	pv_spec_t * ret_pv;
 	str conname, regproc;
 	int retcode = -1;
 
 	if(msg==NULL) {
-	    LM_ERR("cmd_erlang_call: received null msg\n");
-	    return -1;
+		LM_ERR("cmd_erlang_call: received null msg\n");
+		return -1;
 	}
 	if(fixup_get_svalue(msg, (gparam_p)cn, &conname)<0) {
-	    LM_ERR("cmd_erlang_call: cannot get the connection name\n");
-	    return -1;
+		LM_ERR("cmd_erlang_call: cannot get the connection name\n");
+		return -1;
 	}
 	for(node=nodes_lst;node;node=node->next) {
-		LM_DBG("cmd_erlang_call: matching %s with %.*s\n",node->name,conname.len,conname.s);
 		if(strcmp(node->name, conname.s)==0) break;
 	}
-	if(node==0){
+	if(node==0) {
 		LM_ERR("cmd_erlang_call: no such connection %.*s\n",conname.len,conname.s);
 		return -1;
 	}
 
 	if(fixup_get_svalue(msg, (gparam_p)rp, &regproc)<0) {
-	    LM_ERR("cmd_erlang_call: cannot get the registered proc name\n");
-	    return -1;
+		LM_ERR("cmd_erlang_call: cannot get the registered proc name\n");
+		return -1;
 	}
 	printbuf_len = AVP_PRINTBUF_SIZE-1;
-	if(pv_printf(msg, (pv_elem_p)ar, printbuf, &printbuf_len)<0 || printbuf_len<=0)
-	{
+	if(pv_printf(msg, (pv_elem_p)ar, printbuf, &printbuf_len)<0 || printbuf_len<=0) {
 		LM_ERR("erlang_cmd_call: cannot expand args expression.\n");
 		return -1;
 	}
@@ -84,12 +83,12 @@ int cmd_erlang_call(struct sip_msg* msg, char *cn, char *rp, char *ar, char *_re
 	    goto error;
 	}
 
-	erl_cmd->ret_pv = (pv_spec_t*)shm_malloc(sizeof(pv_spec_t));
-	if (!erl_cmd->ret_pv) {
-	    LM_ERR("no shm memory\n\n");
-	    goto error;
+	ret_pv = (pv_spec_t*)shm_malloc(sizeof(pv_spec_t));
+	if (!ret_pv) {
+		LM_ERR("no shm memory\n\n");
+		return -1;
 	}
-	memcpy(erl_cmd->ret_pv, (pv_spec_t *)_ret_pv, sizeof(pv_spec_t));
+	memcpy(ret_pv, (pv_spec_t *)_ret_pv, sizeof(pv_spec_t));
 
 	if(lock_init(&(erl_cmd->lock))==NULL) {
 	    LM_ERR("cannot init the lock\n");

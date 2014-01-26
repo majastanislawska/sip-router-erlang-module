@@ -171,7 +171,6 @@ int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, ei_x_buff *re
 
 error:
     if(erl_cmd) {
-	if(erl_cmd->ret_pv) shm_free(erl_cmd->ret_pv);
 	if(erl_cmd->erlbuf) shm_free(erl_cmd->erlbuf);
 	if(erl_cmd->reg_name) shm_free(erl_cmd->reg_name);
 	shm_free(erl_cmd);

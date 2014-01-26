@@ -20,11 +20,9 @@ struct erlang_cmd {
     int cmd;
     struct nodes_list* node;
     char *reg_name;
-    pv_spec_t * ret_pv;
     char *erlbuf;
     int erlbuf_len;
     int decode_index;
-    int route_no;
     int retcode;
     unsigned int num;
     unsigned int serial;

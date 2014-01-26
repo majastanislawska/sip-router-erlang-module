@@ -36,6 +36,7 @@ int cmd_erlang_rex(struct sip_msg* msg, char *cn , char *mo, char *fu, char *ar,
 	static char printbuf[AVP_PRINTBUF_SIZE];
 	int printbuf_len, bytessent;
 	ei_x_buff argbuf;
+	pv_spec_t *ret_pv;
 	struct nodes_list* node;
 	struct erlang_cmd *erl_cmd;
 	erlang_pid erl_pid;
@@ -89,12 +90,12 @@ int cmd_erlang_rex(struct sip_msg* msg, char *cn , char *mo, char *fu, char *ar,
 	    goto error;
 	}
 
-	erl_cmd->ret_pv = (pv_spec_t*)shm_malloc(sizeof(pv_spec_t));
-	if (!erl_cmd->ret_pv) {
+	ret_pv = (pv_spec_t*)shm_malloc(sizeof(pv_spec_t));
+	if (!ret_pv) {
 	    LM_ERR("no shm memory\n\n");
 	    goto error;
 	}
-	memcpy(erl_cmd->ret_pv, (pv_spec_t *)_ret_pv, sizeof(pv_spec_t));
+	memcpy(ret_pv, (pv_spec_t *)_ret_pv, sizeof(pv_spec_t));
 
 	if(lock_init(&(erl_cmd->lock))==NULL) {
 	    LM_ERR("cannot init the lock\n");
@@ -151,11 +152,11 @@ int cmd_erlang_rex(struct sip_msg* msg, char *cn , char *mo, char *fu, char *ar,
 	argbuf.buff=erl_cmd->erlbuf;
 	argbuf.buffsz=erl_cmd->erlbuf_len;
 	argbuf.index=erl_cmd->decode_index;
-	fill_retpv(erl_cmd->ret_pv,&argbuf,&(argbuf.index));
+	fill_retpv(ret_pv,&argbuf,&(argbuf.index));
 	retcode=1;
 error:
 	if(erl_cmd) {
-	    if(erl_cmd->ret_pv) shm_free(erl_cmd->ret_pv);
+	    if(ret_pv) shm_free(ret_pv);
 	    if(erl_cmd->erlbuf) shm_free(erl_cmd->erlbuf);
 	    if(erl_cmd->reg_name) shm_free(erl_cmd->reg_name);
 	    shm_free(erl_cmd);

@@ -128,7 +128,6 @@ int cmd_erlang_info(struct sip_msg* msg, char *cn, char *rp, char *ar) {
 	retcode=1;
 error:
 	if(erl_cmd) {
-	    if(erl_cmd->ret_pv) shm_free(erl_cmd->ret_pv);
 	    if(erl_cmd->erlbuf) shm_free(erl_cmd->erlbuf);
 	    if(erl_cmd->reg_name) shm_free(erl_cmd->reg_name);
 	    shm_free(erl_cmd);

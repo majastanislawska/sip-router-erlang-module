@@ -41,20 +41,21 @@ int cmd_erlang_call_route(struct sip_msg* msg, char *cn , char *rp, char *ar, ch
 	struct erlang_cmd *erl_cmd;
 	erlang_pid erl_pid;
 	erlang_ref ref;
+	pv_spec_t * ret_pv;
 	str conname, regproc;
 	struct run_act_ctx ra_ctx;
+	int route_no;
 	int retcode = -1;
 
 	if(msg==NULL) {
-	    LM_ERR("cmd_erlang_call_route: received null msg\n");
-	    return -1;
+		LM_ERR("cmd_erlang_call_route: received null msg\n");
+		return -1;
 	}
 	if(fixup_get_svalue(msg, (gparam_p)cn, &conname)<0) {
-	    LM_ERR("cmd_erlang_call_route: cannot get the connection name\n");
-	    return -1;
+		LM_ERR("cmd_erlang_call_route: cannot get the connection name\n");
+		return -1;
 	}
 	for(node=nodes_lst;node;node=node->next) {
-		LM_DBG("cmd_erlang_call_route: matching %s with %.*s\n",node->name,conname.len,conname.s);
 		if(strcmp(node->name, conname.s)==0) break;
 	}
 	if(node==0){
@@ -63,13 +64,12 @@ int cmd_erlang_call_route(struct sip_msg* msg, char *cn , char *rp, char *ar, ch
 	}
 
 	if(fixup_get_svalue(msg, (gparam_p)rp, &regproc)<0) {
-	    LM_ERR("cmd_erlang_call_route: cannot get the registered proc name\n");
-	    return -1;
+		LM_ERR("cmd_erlang_call_route: cannot get the registered proc name\n");
+		return -1;
 	}
 
 	printbuf_len = AVP_PRINTBUF_SIZE-1;
-	if(pv_printf(msg, (pv_elem_p)ar, printbuf, &printbuf_len)<0 || printbuf_len<=0)
-	{
+	if(pv_printf(msg, (pv_elem_p)ar, printbuf, &printbuf_len)<0 || printbuf_len<=0) {
 		LM_ERR("erlang_cmd_call_route: cannot expand args expression.\n");
 		return -1;
 	}
@@ -87,12 +87,11 @@ int cmd_erlang_call_route(struct sip_msg* msg, char *cn , char *rp, char *ar, ch
 	    goto error;
 	}
 
-	erl_cmd->ret_pv = (pv_spec_t*)shm_malloc(sizeof(pv_spec_t));
-	if (!erl_cmd->ret_pv) {
-	    LM_ERR("no shm memory\n\n");
-	    goto error;
+	ret_pv = (pv_spec_t*)shm_malloc(sizeof(pv_spec_t));
+	if (!ret_pv) {
+		LM_ERR("no shm memory\n\n");
+		return -1;
 	}
-	memcpy(erl_cmd->ret_pv, (pv_spec_t *)_ret_pv, sizeof(pv_spec_t));
 
 	if(lock_init(&(erl_cmd->lock))==NULL) {
 	    LM_ERR("cannot init the lock\n");
@@ -103,6 +102,7 @@ int cmd_erlang_call_route(struct sip_msg* msg, char *cn , char *rp, char *ar, ch
 	    LM_ERR("no shm memory\n\n");
 	    goto error;
 	}
+	memcpy(ret_pv, (pv_spec_t *)_ret_pv, sizeof(pv_spec_t));
 
 	LM_DBG("cmd_erlang_call_route:  %.*s %.*s %.*s\n",conname.len,conname.s,
 			regproc.len,regproc.s, printbuf_len,printbuf);
@@ -165,21 +165,21 @@ int cmd_erlang_call_route(struct sip_msg* msg, char *cn , char *rp, char *ar, ch
 	fill_retpv(erl_cmd->ret_pv,&argbuf,&(argbuf.index));
 
 	//execute route
-	erl_cmd->route_no=route_get(&main_rt, routename);
-	if (erl_cmd->route_no==-1){
-	    ERR("node_receive: failed to fix route \"%s\": route_get() failed\n",routename);
-	    return -1;
+	route_no=route_get(&main_rt, routename);
+	if (route_no==-1){
+		ERR("node_receive: failed to fix route \"%s\": route_get() failed\n",routename);
+		goto error;
 	}
-	if (main_rt.rlist[erl_cmd->route_no]==0){
-	    WARN("node_receive: route \"%s\" is empty / doesn't exist\n", routename);
+	if (main_rt.rlist[route_no]==0){
+		WARN("node_receive: route \"%s\" is empty / doesn't exist\n", routename);
 	}
 	init_run_actions_ctx(&ra_ctx);
-	i=run_actions(&ra_ctx, main_rt.rlist[erl_cmd->route_no], msg);
+	i=run_actions(&ra_ctx, main_rt.rlist[route_no], msg);
 	if (i < 0) {
-	    LM_ERR("erlang_call_route: run_actions failed (%d)\n",i);
-	    goto error;
+		LM_ERR("erlang_call_route: run_actions failed (%d)\n",i);
+		goto error;
 	}
-	retcode=(call_route_exit)?0:1;;
+	retcode=(call_route_exit)?0:1;
 error:
 	if(erl_cmd) {
 	    if(erl_cmd->ret_pv) shm_free(erl_cmd->ret_pv);
