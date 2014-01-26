@@ -77,15 +77,18 @@ void fill_retpv(pv_spec_t *dst, ei_x_buff *buf ,int *decode_index) {
     free(pbuf);
 }
 
-int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, char *_ret_pv) {
+int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, ei_x_buff *ret_buf) {
 #define AVP_PRINTBUF_SIZE 1024
     struct nodes_list* node;
     struct erlang_cmd *erl_cmd;
-    ei_x_buff argbuf, retbuf;
+    ei_x_buff argbuf;
     erlang_pid erl_pid;
     erlang_ref ref;
-    int i,bytessent,retcode;
+    int bytessent,retcode;
+#ifdef DEBUG
+    int i=1;
     char *pbuf= NULL;
+#endif
 
     for(node=nodes_lst;node;node=node->next) {
 	LM_DBG("do_erlang_call: matching %s with %.*s\n",node->name,conname->len,conname->s);
@@ -101,7 +104,6 @@ int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, char *_ret_pv
 	return -1;
     }
     memset(erl_cmd,0,sizeof(struct erlang_cmd));
-
 
     if(lock_init(&(erl_cmd->lock))==NULL) {
 	LM_ERR("cannot init the lock\n");
@@ -132,13 +134,6 @@ int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, char *_ret_pv
     erl_cmd->refn1=ref.n[1];
     erl_cmd->refn2=ref.n[2];
 
-    i=1;
-    ei_s_print_term(&pbuf, argbuf.buff, &i);
-    LM_DBG("argbuf is pbuf='%s' buf.buffsz=%d buf.index=%d i=%d\n", pbuf, argbuf.buffsz,argbuf.index,i );
-    i=0;
-    ei_s_print_term(&pbuf, payload->buff, &i);
-    LM_DBG("payload is pbuf='%s' buf.buffsz=%d buf.index=%d i=%d\n", pbuf, payload->buffsz,payload->index,i );
-
     ei_x_append(&argbuf, payload);
     erl_cmd->erlbuf_len=argbuf.index;
     erl_cmd->erlbuf=shm_malloc(argbuf.index);
@@ -147,12 +142,11 @@ int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, char *_ret_pv
 	goto error;
     }
     memcpy(erl_cmd->erlbuf,argbuf.buff,argbuf.index);
-
-    i=1;
+#ifdef DEBUG
     ei_s_print_term(&pbuf, erl_cmd->erlbuf, &i);
     LM_DBG("message is pbuf='%s' buf.buffsz=%d buf.index=%d i=%d\n", pbuf, argbuf.buffsz,argbuf.index,i );
     free(pbuf);pbuf=NULL;
-
+#endif
     lock_get(&(erl_cmd->lock));
     bytessent=write(pipe_fds[1], &erl_cmd, sizeof(erl_cmd));
     LM_DBG("do_erlang_call: locked, sent %d  %d %s %d %p %p, waiting for release\n",bytessent,
@@ -164,11 +158,16 @@ int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, char *_ret_pv
 	LM_DBG("cmd_erlang_call: failed %d\n",retcode);
 	goto error;
     }
-    retbuf.buff=erl_cmd->erlbuf;
-    retbuf.buffsz=erl_cmd->erlbuf_len;
-    retbuf.index=erl_cmd->decode_index;
-    fill_retpv(erl_cmd->ret_pv,&retbuf,&(retbuf.index));
-    retcode=1;
+    if (ret_buf) {
+        ret_buf->buff=erl_cmd->erlbuf;
+        ret_buf->buffsz=erl_cmd->erlbuf_len;
+        ret_buf->index=erl_cmd->decode_index;
+    } else {
+	shm_free(erl_cmd->erlbuf); //caller ignores response
+    }
+    shm_free(erl_cmd->reg_name);
+    shm_free(erl_cmd);
+    return 1;
 
 error:
     if(erl_cmd) {

@@ -4,7 +4,7 @@
 #include "../../sr_module.h"
 #include <ei.h>
 
-typedef int (*erlang_func_t)(str*, str*, ei_x_buff*, char*);
+typedef int (*erlang_func_t)(str*, str*, ei_x_buff*, ei_x_buff*);
 
 typedef struct erlang_binds {
 	erlang_func_t do_erlang_call;
