@@ -164,6 +164,7 @@ int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, ei_x_buff *re
         ret_buf->index=erl_cmd->decode_index;
     } else {
 	shm_free(erl_cmd->erlbuf); //caller ignores response
+	erl_cmd->erlbuf=NULL;
     }
     shm_free(erl_cmd->reg_name);
     shm_free(erl_cmd);

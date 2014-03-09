@@ -82,11 +82,15 @@ int cmd_erlang_call(struct sip_msg* msg, char *cn, char *rp, char *ar, char *_re
 		LM_ERR("cannot fromat erlang binary from arg string\n");
 		goto error;
 	}
-	do_erlang_call(&conname, &regproc, &argbuf, &retbuf);
-	fill_retpv(ret_pv,&retbuf,&(retbuf.index));
-	if(retbuf.buff) shm_free(retbuf.buff);
-	retcode=1;
+	retcode=do_erlang_call(&conname, &regproc, &argbuf, &retbuf);
+	if(retcode==1)  {
+		fill_retpv(ret_pv,&retbuf,&(retbuf.index));
+		LM_DBG("cmd_erlang_call successful\n");
+	} else {
+		LM_ERR("cmd_erlang_call failed %d\n", retcode);
+	}
 error:
+	if(retbuf.buff) shm_free(retbuf.buff);
 	ei_x_free(&argbuf);
 	return retcode;
 }

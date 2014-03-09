@@ -61,6 +61,10 @@ void child_loop(int data_pipe)
 	if(FD_ISSET(data_pipe, &fdset)) {
 	    int unlock=0;
 	    readcount=read(data_pipe, &erl_cmd, sizeof(erl_cmd));
+	    if (readcount==0)  {
+//		LM_DBG("erlang_child_loop: readcount=0\n");
+		continue;
+	    }
 	    LM_DBG("erlang_child_loop: read from worker %d %d %s %d %p %p\n",readcount,
 			erl_cmd->cmd,erl_cmd->reg_name,erl_cmd->erlbuf_len,erl_cmd->erlbuf,erl_cmd->node);
 	    node=erl_cmd->node;

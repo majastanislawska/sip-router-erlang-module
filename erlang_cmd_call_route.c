@@ -86,7 +86,12 @@ int cmd_erlang_call_route(struct sip_msg* msg, char *cn , char *rp, char *ar, ch
 		LM_ERR("cannot fromat erlang binary from arg string\n");
 		goto error;
 	}
-	do_erlang_call(&conname, &regproc, &argbuf, &retbuf);
+	retcode=do_erlang_call(&conname, &regproc, &argbuf, &retbuf);
+	if(retcode!=1)  {
+		LM_ERR("cmd_erlang_call_route failed %d\n", retcode);
+		goto error;
+	}
+	retcode=-1;
 	//we have a two element tuple here
 	ei_decode_tuple_header(retbuf.buff, &(retbuf.index), &i);
 	//first element should be atom we can add check here
@@ -94,7 +99,6 @@ int cmd_erlang_call_route(struct sip_msg* msg, char *cn , char *rp, char *ar, ch
 	ei_decode_atom(retbuf.buff, &(retbuf.index), routename);
 	//second element is put to ret_pv wihout bothering what is it
 	fill_retpv(ret_pv,&retbuf,&(retbuf.index));
-	if(retbuf.buff) shm_free(retbuf.buff);
 
 	//execute route
 	route_no=route_get(&main_rt, routename);
@@ -114,6 +118,7 @@ int cmd_erlang_call_route(struct sip_msg* msg, char *cn , char *rp, char *ar, ch
 	retcode=(call_route_exit)?0:1;
 error:
 
+	if(retbuf.buff) shm_free(retbuf.buff);
 	ei_x_free(&argbuf);
 	return retcode;
 }
