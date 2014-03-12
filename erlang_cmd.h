@@ -23,6 +23,7 @@ struct erlang_cmd {
     char *erlbuf;
     int erlbuf_len;
     int decode_index;
+    ticks_t timeout;
     int retcode;
     unsigned int num;
     unsigned int serial;

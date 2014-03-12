@@ -15,17 +15,39 @@ void child_loop(int data_pipe)
     fd_set fdset;
     int selret,maxfd;
     struct nodes_list *node;
-    struct erlang_cmd *erl_cmd;
+    struct erlang_cmd *erl_cmd, **cmd_p;
+    time_t cur_ticks;
     struct timeval tv;
     int readcount;
     int erl_retcode=-1;
 
     while(1) {
+	erl_cmd=NULL;
+	cmd_p=&pending_cmds;
+	cur_ticks=get_ticks_raw();
+	while(*cmd_p) {
+	    //timeout ==0 means we did not send it yet
+	    if (((*cmd_p)->timeout !=0) &&((*cmd_p)->timeout < cur_ticks)) {
+		LM_DBG("removing stalled request %p\n",*cmd_p);
+		erl_cmd=*cmd_p;
+		erl_cmd->retcode=-5;
+		//sending worked expects this to be freed
+		shm_free(erl_cmd->erlbuf);
+		erl_cmd->erlbuf=NULL;
+		erl_cmd->erlbuf_len=0;
+
+		lock_release(&(erl_cmd->lock));
+		*cmd_p=(*cmd_p)->next;
+		break;
+	    }
+	    cmd_p=&((*cmd_p)->next);
+	}
+
 	FD_ZERO(&fdset);
 	FD_SET(data_pipe, &fdset);
 //	LM_DBG("child_loop: datapipe FD_SET(%d)\n",data_pipe);
 	maxfd=data_pipe;
-	tv.tv_sec=10; tv.tv_usec=0;
+	tv.tv_sec=1; tv.tv_usec=0;
 	
 //	LM_DBG("erlang_child_loop: loopstart\n");
 	for(node=nodes_lst; node; node=node->next){
@@ -40,7 +62,7 @@ void child_loop(int data_pipe)
 	}
 	selret = select(maxfd+1, &fdset, NULL, NULL, &tv);
 //	LM_DBG("erlang_child_loop: after select\n");
-	cfg_update();
+//	cfg_update();
 
 	if(selret < 0) {
 	    LM_ERR("erlang_child_loop: error in select(): %d %s\n",errno,strerror(errno));
@@ -52,7 +74,7 @@ void child_loop(int data_pipe)
 	}
 	for(node=nodes_lst; node; node=node->next){
 	    if(node->fd<=0) //skip disconected nodes
-	        continue;		
+	        continue;
 	    if(FD_ISSET(node->fd, &fdset)) {
 		node_receive(node);
 	    }
@@ -68,6 +90,7 @@ void child_loop(int data_pipe)
 	    LM_DBG("erlang_child_loop: read from worker %d %d %s %d %p %p\n",readcount,
 			erl_cmd->cmd,erl_cmd->reg_name,erl_cmd->erlbuf_len,erl_cmd->erlbuf,erl_cmd->node);
 	    node=erl_cmd->node;
+	    erl_cmd->timeout = get_ticks_raw()+MS_TO_TICKS(5000);
 	    switch(erl_cmd->cmd) {
 		case ERLANG_INFO:
 		case ERLANG_CAST: 
