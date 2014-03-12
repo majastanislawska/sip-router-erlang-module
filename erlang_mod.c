@@ -83,6 +83,8 @@ struct module_exports exports = {
 	erlang_child_init  /* per-child init function */
 };
 
+int con_mgr_pid=0;
+
 int mod_register(char *path, int *dlflags, void *p1, void *p2)
 {
 	erl_init(NULL,0);
@@ -95,6 +97,7 @@ int mod_register(char *path, int *dlflags, void *p1, void *p2)
 }
 static int erlang_mod_init(void)
 {
+	struct nodes_list* n;
 
 	LM_DBG("erlang_modinit, fd_no=%d\n", fd_no);
 	if (pipe(pipe_fds) < 0) {
@@ -111,42 +114,46 @@ static int erlang_mod_init(void)
 	    LM_ERR("erlang_mod_init: error initialising ref_lock\n");
 	    return -1;
 	  }
-	  
+	for (n=nodes_lst; n; n=n->next){
+		n->fd=-1;
+		n->timeout=time(NULL);
+	}
 	register_procs(1); /* we will be creating an extra process */
 	register_fds(fd_no+2);
 	cfg_register_child(1);
-
+	con_mgr_pid=fork();
+	if(con_mgr_pid<0){
+		return -1;
+	}
+	if (con_mgr_pid == 0){ /* child */
+		DBG("erlang_mod_init: child\n");
+		is_main=0;
+		process_no=1;
+//		if (init_child(PROC_NOCHLDINIT)<0) return -1;
+//		if (cfg_child_init()) return -1;
+		DBG("erlang_mod_init: after fork caling child_loop\n");
+		close(pipe_fds[1]);
+		child_loop(pipe_fds[0]);
+	}else{ /* parent */
+		DBG("erlang_mod_init parent: child=%d\n", con_mgr_pid);
+	}
 	return 0;
 }
 static int erlang_child_init(int rank)
 {
-	int pid;
-	struct nodes_list* n;
 	LM_DBG("erlang_child_init \n");
 	if (rank==PROC_INIT) {
 		LM_DBG("erlang_child_init: called for PROC_INIT dooing nothing\n");
+// taken from fork_process()
+		lock_get(process_lock);
+		pt[*process_count].pid=con_mgr_pid;
+		strncpy(pt[*process_count].desc, "erlang node mgr", 16);
+		(*process_count)++;
+		lock_release(process_lock);
+
 	}
 	if (rank == PROC_MAIN){
 		LM_DBG("erlang_child_init: called for PROC_MAIN\n");
-		for (n=nodes_lst; n; n=n->next){
-			n->fd=-1;
-			n->timeout=time(NULL);
-//			node_connect_init(n);
-		}
-		pid=fork_process(PROC_RPC, "erlang nodes manager", 1);
-		if (pid<0){
-			return -1;
-		}
-		if (pid == 0){ /* child */
-			DBG("erlang_child_init: child(%d)\n",rank);
-			is_main=0;
-			if (cfg_child_init()) return -1;
-			DBG("erlang_child_init: after fork rank:%d caling child_loop\n",rank);
-			close(pipe_fds[1]);
-			child_loop(pipe_fds[0]);
-		}else{ /* parent */
-			DBG("erlang_child_init: parent(%d), child=%d\n",rank, pid);
-		}
 		return 0;
 	}
 	LM_DBG("erlang_child_init: called for other\n");
