@@ -1,0 +1,18 @@
+{application, db_mock,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+    {modules, [
+    db_mock_app,
+    db_mock_sup,
+    db_mock_server,
+    schema
+  ]},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { db_mock_app, []}},
+  {env, []}
+ ]}.
