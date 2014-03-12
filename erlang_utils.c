@@ -80,7 +80,7 @@ void fill_retpv(pv_spec_t *dst, ei_x_buff *buf ,int *decode_index) {
 int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, ei_x_buff *ret_buf) {
 #define AVP_PRINTBUF_SIZE 1024
     struct nodes_list* node;
-    struct erlang_cmd *erl_cmd;
+    struct erlang_cmd *erl_cmd=NULL;
     ei_x_buff argbuf;
     erlang_pid erl_pid;
     erlang_ref ref;
@@ -90,6 +90,12 @@ int do_erlang_call(str *conname, str *regproc, ei_x_buff* payload, ei_x_buff *re
     char *pbuf= NULL;
 #endif
 
+    //wipe this stuff in advance, as it may confuse caller on error response
+    if (ret_buf) {
+        ret_buf->buff=NULL;
+        ret_buf->buffsz=0;
+        ret_buf->index=0;
+    }
     for(node=nodes_lst;node;node=node->next) {
 	LM_DBG("do_erlang_call: matching %s with %.*s\n",node->name,conname->len,conname->s);
 	if(strcmp(node->name, conname->s)==0) break;
