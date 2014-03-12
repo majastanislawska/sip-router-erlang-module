@@ -179,7 +179,17 @@ int srdb1_encode_c(const db_key_t* _c, const int _nc, ei_x_buff *argbuf){
 int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _op,
 	     const db_val_t* _v, const db_key_t* _c, const int _n, const int _nc,
 	     const db_key_t _o, db1_res_t** _r) {
-	ei_x_buff argbuf;
+	ei_x_buff argbuf,retbuf;
+	int retcode,i,j;
+	int n_cols,n_rows,len;
+	db1_res_t *res;
+	db_row_t *rows = NULL, *row;
+	db_val_t *val;
+	char atom[MAXATOMLEN];
+	ei_term term;
+	str *sname;
+//	static str table_version=STR_STATIC_INIT("table_version");
+
 
 	
 	LM_DBG("erlang_srdb1_query %p %p\n",_r, *_r);
@@ -200,9 +210,131 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 //	ei_x_encode_atom_len(&argbuf,_o->s,_o->len);
 	ei_x_encode_list_header(&argbuf, 0);
 
-	erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL);
+	retcode=erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, &retbuf);
 	ei_x_free(&argbuf);
+	if (retcode<0) {
+		if(retbuf.buff) shm_free(retbuf.buff);
+		return retcode;
+	}
+	// we have a tuple there:
+	ei_decode_tuple_header(retbuf.buff, &(retbuf.index), &i);
+	i=retbuf.index;
+	ei_skip_term(retbuf.buff, &i);
+	LM_DBG("erlang_srdb1_query: position of end of field list should be %d\n",i);
+	//first is list of 5-element tuples containing name and type of field
+	ei_decode_list_header(retbuf.buff, &(retbuf.index), &n_cols);
+	LM_DBG("erlang_srdb1_query: length -f field_list is %d\n",n_cols);
+	res=db_new_result();
+	if (db_allocate_columns(res, n_cols) != 0)
+		goto error;
+	RES_COL_N(res) = n_cols;
+	for(i=0; i < n_cols; i++) {
+		ei_decode_tuple_header(retbuf.buff, &(retbuf.index), &j);
+		if( j!=5) LM_ERR("erlang_srdb1_query name&type list element tuple is not 2\n");
+		ei_decode_atom(retbuf.buff, &(retbuf.index), atom);
+		len=strlen(atom);
+		sname = (str*)pkg_malloc(sizeof(str)+len+1);
+		if (!sname) {
+			LM_ERR("no private memory left\n");
+			goto error;
+		}
+		sname->len = len;
+		sname->s = (char*)sname + sizeof(str);
+		memcpy(sname->s, atom, len);
+		sname->s[len] = '\0';
+		RES_NAMES(res)[i] = sname;
+		ei_decode_atom(retbuf.buff, &(retbuf.index), atom);
+		if(strcmp("int",atom)==0) { RES_TYPES(res)[i]=DB1_INT; }
+		if(strcmp("string",atom)==0) { RES_TYPES(res)[i]=DB1_STR; }
+//		if(strcmp("string",atom)==0) { RES_TYPES(res)[i]=DB1_DOUBLE; }
+//		if(strcmp("string",atom)==0) { RES_TYPES(res)[i]=DB1_BLOB; }
+		ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term);
+		ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term);
+		ei_decode_atom(retbuf.buff, &(retbuf.index), atom);
+	}
+	ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term); // List tail,
+	LM_DBG("erlang_srdb1_query: position after scanning is %d\n",retbuf.index);
+	//now rows, list of tuples
+	ei_decode_list_header(retbuf.buff, &(retbuf.index), &n_rows);
+	LM_DBG("erlang_srdb1_query values list size is %d\n",n_rows);
+	RES_NUM_ROWS(res)=n_rows;
+	if (n_rows==0) {
+		LM_DBG("erlang_srdb1_query no rows returned\n");
+		RES_ROWS(res) = NULL;
+		*_r=res;
+		return 0;
+	}
+	rows = pkg_realloc(rows, sizeof(db_row_t) * n_rows);
+	if (rows == NULL)
+		goto error;
+	RES_ROWS(res) = rows;
+	for(i=0; i < n_rows; i++) {
+		RES_ROW_N(res)=i+1;
+		row = &RES_ROWS(res)[0];
+		if (db_allocate_row(res, row) != 0)
+			goto error;
+		ei_decode_tuple_header(retbuf.buff, &(retbuf.index), &j);
+		if(j!=n_cols) {
+			LM_ERR("erlang_srdb1_query mismatch:values list element tuple size is %d n_cols from header was %d\n",j, n_cols);
+		}
+		for (j = 0, val = ROW_VALUES(row); j < RES_COL_N(res); j++, val++) {
+			VAL_TYPE(val) = RES_TYPES(res)[i];
+			VAL_NULL(val) = 0;
+			VAL_FREE(val) = 0;
+//<------><------><------>if (sqlite3_column_type(conn->stmt, i) == SQLITE_NULL) {
+//<------><------><------><------>VAL_NULL(val) = 1;
+//			ei_get_type(retbuf.buff, &(retbuf.index), int *type, int *size);
+			retcode=ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term);
+			if (retcode == -1) {
+				LM_ERR("erlang_srdb1_query: error decoding erlang term %d %d\n",i,j);
+				goto error;
+			}
+			if (retcode == 0) LM_DBG("erlang_srdb1_query: need decode agin\n");
+			switch(term.ei_type) {
+				case ERL_SMALL_INTEGER_EXT:
+				case ERL_INTEGER_EXT:
+					VAL_INT(val) = term.value.i_val;
+					break;
+				case ERL_FLOAT_EXT:
+				case NEW_FLOAT_EXT:
+					VAL_DOUBLE(val)=term.value.d_val;
+					break;
+				case ERL_ATOM_EXT:
+				case ERL_SMALL_ATOM_EXT:
+				case ERL_ATOM_UTF8_EXT:
+				case ERL_SMALL_ATOM_UTF8_EXT:
+//					VAL_DOUBLE(val)=term.value.f_val;
+					break;
+				case ERL_REFERENCE_EXT:
+				case ERL_NEW_REFERENCE_EXT:
+				case ERL_PORT_EXT:
+				case ERL_PID_EXT:
+				case ERL_SMALL_TUPLE_EXT:
+				case ERL_LARGE_TUPLE_EXT:
+				case ERL_NIL_EXT:
+				case ERL_STRING_EXT:
+				case ERL_LIST_EXT:
+				case ERL_BINARY_EXT:
+				case ERL_SMALL_BIG_EXT:
+				case ERL_LARGE_BIG_EXT:
+				case ERL_NEW_FUN_EXT:
+				case ERL_FUN_EXT:
+				default:
+				    LM_ERR("erlang_srdb1_query: don't know how to handle element %d in row %d in response\n",j,i);
+			}
+		}
+	}
+	ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term); // List tail,
+
+
+
+
+	*_r=res;
 	return 0;
+error:
+	if (res)
+		db_free_result(res);
+	return -1;
 }
 
 /**
