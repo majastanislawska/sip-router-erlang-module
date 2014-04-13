@@ -9,6 +9,7 @@ XSLTPROC = /usr/bin/xsltproc
 XSLTPROC_FLAGS = --xinclude
 
 DB_SCHEMA=apps/db_mock/src/schema.erl
+DB_SCHEMA_HRL=apps/db_mock/lib/schema.hrl
 DB_ERLANG_XSL = db_erlang_mock.xsl
 #all: deps dirs compile
 all: deps compile
@@ -38,6 +39,7 @@ $(DB_SCHEMA): db_erlang_mock.xml db_erlang_mock.xsl
 	XML_CATALOG_FILES=$(DB_CATALOG) $(XSLTPROC) $(XSLTPROC_FLAGS) \
 	--path $(SCHEMA_HOME) \
 	--stringparam dest "$(DB_SCHEMA)" \
+	--stringparam hrldest "$(DB_SCHEMA_HRL)" \
 	--stringparam db "db_erlang" \
 	--debug \
 	$(DB_ERLANG_XSL) db_erlang_mock.xml

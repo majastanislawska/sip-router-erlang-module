@@ -29,19 +29,23 @@
                 xmlns:xi="http://www.w3.org/2001/XInclude"
 >
    <xsl:template match="/">
-	<xsl:variable name="createfile" select="$dest"/>
-	<xsl:document href="{$createfile}" method="text" indent="no" omit-xml-declaration="yes">
+	<xsl:variable name="hrlfile" select="$hrldest"/>
+	<xsl:document href="{$hrlfile}" method="text" indent="no" omit-xml-declaration="yes">
+	    <xsl:text>% record fdefinitions for dbschema&#x0A;</xsl:text>
+	    <xsl:text>&#x0A;</xsl:text>
+	    <xsl:apply-templates select="foo[1]" mode="hrl"/>
+	</xsl:document>
+	<xsl:variable name="erlfile" select="$dest"/>
+	<xsl:document href="{$erlfile}" method="text" indent="no" omit-xml-declaration="yes">
 	    <xsl:text>-module(schema).&#x0A;</xsl:text>
 	    <xsl:text>-export([schema/1,version/1]).&#x0A;</xsl:text>
 	    <xsl:text>&#x0A;</xsl:text>
-	    <xsl:apply-templates select="foo[1]"/>
-<!--	    <xsl:apply-templates select="database"/>-->
+	    <xsl:apply-templates select="foo[1]" mode="erl"/>
 	</xsl:document>
     </xsl:template>
 
-    <xsl:template match="foo">
-	<xsl:apply-templates select="database"/>
-	<xsl:apply-templates select="user"/>
+    <xsl:template match="foo" mode="erl">
+	<xsl:apply-templates select="database" mode="erl"/>
 	<!-- Create row in version table -->
 	<xsl:for-each select="database/table">
 	    <xsl:if test="version">
@@ -56,6 +60,9 @@
 		</xsl:choose>
 	    </xsl:if>
 	</xsl:for-each>
+    </xsl:template>
+    <xsl:template match="foo" mode="hrl">
+	<xsl:apply-templates select="database" mode="hrl"/>
     </xsl:template>
         
 
@@ -100,7 +107,7 @@
 
     <!-- ################ DATABASE ################# -->
 
-    <xsl:template match="database">
+    <xsl:template match="database" mode="erl">
 	<xsl:variable name="database.name">
 	    <xsl:call-template name="get-name"/>
 	</xsl:variable>
@@ -110,7 +117,7 @@
 
 	<!-- Create all tables -->
 	<xsl:if test="table">
-	    <xsl:apply-templates select="table"/>
+	    <xsl:apply-templates select="table" mode="erl"/>
 	    <xsl:choose>
 		<xsl:when test="not(position()=last())">
 		    <xsl:text>;&#x0A;</xsl:text>
@@ -121,21 +128,40 @@
 	    </xsl:choose>
 	</xsl:if>
 	<xsl:text>&#x0A;</xsl:text>
-	
-<!--	<xsl:apply-templates select="user"/> -->
     </xsl:template> 
 
-<!--    <xsl:template match="database" mode="data">
+    <xsl:template match="database" mode="hrl">
+	<xsl:variable name="database.name">
+	    <xsl:call-template name="get-name"/>
+	</xsl:variable>
+	<xsl:text>%% </xsl:text>
+	<xsl:value-of select="$database.name"/>
+	<xsl:text>&#x0A;</xsl:text>
 
-	<!- - Insert initial data - ->
-	<xsl:apply-templates select="table" mode="data"/>
-    </xsl:template>
--->
+	<!-- Create all tables -->
+	<!--xsl:if test="table"-->
+	    <xsl:apply-templates select="table" mode="hrl"/>
+	<!--/xsl:if-->
+	<xsl:text>&#x0A;</xsl:text>
+    </xsl:template> 
+
     <!-- ################ /DATABASE ################# -->
 
     <!-- ################ TABLE ################# -->
 
-    <xsl:template match="table">
+    <xsl:template match="table" mode="hrl">
+	<xsl:variable name="table.name">
+	    <xsl:call-template name="get-name"/>
+	</xsl:variable>
+	<xsl:text>-record(</xsl:text>
+	<xsl:value-of select="$table.name"/>
+	<xsl:text>, { </xsl:text>
+	<!-- Process all columns -->
+	<xsl:apply-templates select="column"/>
+	<xsl:text>}).&#x0A;</xsl:text>
+    </xsl:template>
+
+    <xsl:template match="table" mode="erl">
 	<xsl:variable name="table.name">
 	    <xsl:call-template name="get-name"/>
 	</xsl:variable>
@@ -145,38 +171,16 @@
 	<xsl:text>) -> [</xsl:text>
 
 	<!-- Process all columns -->
-	<xsl:apply-templates select="column"/>
-
-	<!-- Process all unique indexes - - >
-	<xsl:apply-templates select="index[child::unique]"/>
--->
-	<!-- Process all primary indexes - - >
-	<xsl:apply-templates select="index[child::primary]"/>
-
-	<xsl:text>&#x0A;</xsl:text>
--->
+	<xsl:apply-templates select="column" mode="erl"/>
 	<xsl:text>]</xsl:text>
-<!--	<xsl:if test="type[@db=$db]">
-	    <xsl:text> Type=</xsl:text>
-	    <xsl:value-of select="normalize-space(type[@db=$db])"/>
-	</xsl:if> -->
 	<xsl:if test="not(position()=last())">
 	    <xsl:text>;&#x0A;</xsl:text>
 	</xsl:if>
-	<!-- Process all indexes -->
-<!--	<xsl:apply-templates select="index"/> -->
-<!--	<xsl:for-each select="index[count(child::unique)=0]">
-	    <xsl:if test="not(child::primary)">
-	        <xsl:call-template name="create_index"/>
-	    </xsl:if>
-	</xsl:for-each> -->
     </xsl:template>
 
     <!-- ################ /TABLE ################# -->
 
     <!-- ################ COLUMN ################# -->
-
-    <xsl:template match="column"/>
 
     <xsl:template name="get-type-string">
 	<xsl:param name="select" select="."/>
@@ -289,109 +293,51 @@
     <!-- ################ /COLUMN ################# -->
 <!-- ************************************************************-->
 
-
-
-
-
-<!-- ################ VERSION ################  -->
-
-    <xsl:template match="version">
-	<xsl:text>version("</xsl:text>
-	<xsl:call-template name="get-name">
-		<xsl:with-param name="select" select="parent::table"/>
-	</xsl:call-template>
-	<xsl:text>") -> </xsl:text>
-	<xsl:value-of select="text()"/>
-    </xsl:template>
-
-<!-- ################ /VERSION ################  -->
-
-
-<!-- ################ INDEX (constraint) ################  -->
-
-    <xsl:template match="index">
-	<xsl:variable name="index.name">
-	    <xsl:call-template name="get-name"/>
-	</xsl:variable>
-
-	<xsl:if test="position()=1">
-	    <xsl:text>,&#x0A;</xsl:text>
-	</xsl:if>
-	<xsl:text>    </xsl:text>
-	<xsl:if test="not($index.name='')">
-		<xsl:text>CONSTRAINT </xsl:text>
-		<xsl:call-template name="get-index-name"/>
-	</xsl:if>
-	<xsl:if test="unique">
-		<xsl:text> UNIQUE (</xsl:text>
-		<xsl:apply-templates select="colref"/>
-		<xsl:text>)</xsl:text>
-	    <xsl:if test="not(position()=last())">
-		<xsl:text>,</xsl:text>
-		<xsl:text>&#x0A;</xsl:text>
-	    </xsl:if>
-	</xsl:if>
-	<!-- PRIMARY KEY standalone definition -->
-	<xsl:if test="primary">
-	    <xsl:text> PRIMARY KEY </xsl:text>
-	    <xsl:text> (</xsl:text>
-	    <xsl:apply-templates select="colref"/>
-	    <xsl:text>)</xsl:text>
-	    <xsl:if test="not(position()=last())">
-		<xsl:text>,</xsl:text>
-		<xsl:text>&#x0A;</xsl:text>
-	    </xsl:if>
-	</xsl:if>
-    </xsl:template>
-
-<!-- ################ /INDEX (constraint) ################  -->
-
-<!-- ################ INDEX (create) ################  -->
-
-    <xsl:template name="create_index">
-	<xsl:variable name="index.name">
-	    <xsl:call-template name="get-name"/>
-	</xsl:variable>
-	<xsl:variable name="table.name">
-	    <xsl:call-template name="get-name">
-		<xsl:with-param name="select" select="parent::table"/>
-	    </xsl:call-template>
-	</xsl:variable>
-
-	<xsl:text>CREATE </xsl:text>
-	<xsl:if test="unique">
-	    <xsl:text>UNIQUE </xsl:text>
-	</xsl:if>
-	<xsl:text>INDEX </xsl:text>
-	<xsl:if test="not($index.name='')">
-		<xsl:call-template name="get-index-name"/>
-	</xsl:if>
-	<xsl:text> ON </xsl:text>
-	<xsl:value-of select="$table.name"/>
-	<xsl:text> (</xsl:text>
-	<xsl:apply-templates select="colref"/>
-	<xsl:text>);&#x0A;</xsl:text>
-
-	<xsl:if test="position()=last()">
-	    <xsl:text>&#x0A;</xsl:text>
-	</xsl:if>
-    </xsl:template>
-
-<!-- ################ /INDEX (create) ################  -->
-
-
 <!-- ################ COLUMN ################  -->
 
     <xsl:template match="column">
+	<xsl:call-template name="get-name"/>
+	<xsl:choose>
+	    <xsl:when test="default[@db=$db]">
+		<xsl:choose>
+		    <xsl:when test="default[@db=$db]/null">
+			<xsl:text>=undefined</xsl:text>
+		    </xsl:when>
+		    <xsl:otherwise>
+			<xsl:value-of select="default[@db=$db]"/>
+		    </xsl:otherwise>
+		</xsl:choose>
+	    </xsl:when>
+	    <xsl:when test="default">
+		<xsl:choose>
+		    <xsl:when test="default/null">
+			<xsl:text>=undefined</xsl:text>
+		    </xsl:when>
+		    <xsl:when test="string(number(default))='NaN'"><!-- test for string value -->
+			<xsl:text>="</xsl:text>
+			<xsl:value-of select="default"/>
+			<xsl:text>"</xsl:text>
+		    </xsl:when>
+		    <xsl:otherwise>
+			<xsl:text>=</xsl:text>
+			<xsl:value-of select="default"/><!-- ommit the quotes for numbers -->
+		    </xsl:otherwise>
+		</xsl:choose>
+	    </xsl:when>
+	</xsl:choose>
+	<xsl:if test="not(position()=last())">
+	    <xsl:text>, </xsl:text>
+	</xsl:if>
+    </xsl:template>
+
+    <xsl:template match="column" mode="erl">
 	<xsl:text>{</xsl:text>
 	<xsl:call-template name="get-name"/>
 	<xsl:text>, </xsl:text>
-
 	<xsl:call-template name="column.type"/>
 	<xsl:text>, </xsl:text>
 	<xsl:call-template name="column.size"/>
 	<xsl:text>, </xsl:text>
-	
 	<xsl:choose>
 	    <xsl:when test="default[@db=$db]">
 		<xsl:choose>
@@ -419,7 +365,7 @@
 		</xsl:choose>
 	    </xsl:when>
 	    <xsl:otherwise>
-		<xsl:text>nodefault</xsl:text>
+		<xsl:text>undefined</xsl:text>
 	    </xsl:otherwise>
 	</xsl:choose>
 	<xsl:text>, </xsl:text>
@@ -442,11 +388,11 @@
 	</xsl:if>
     </xsl:template>
 
+
     <xsl:template name="column.type">
 	<xsl:variable name="type">
 	    <xsl:call-template name="get-type"/>
 	</xsl:variable>
-
 	<xsl:choose>
 	    <xsl:when test="type[@db=$db]">
 		<xsl:value-of select="normalize-space(type[@db=$db])"/>
@@ -509,34 +455,20 @@
 	</xsl:choose>
     </xsl:template>
 
+
 <!-- ################ /COLUMN ################  -->
 
+<!-- ################ VERSION ################  -->
 
-<!-- ################ COLREF ################  -->
-
-    <xsl:template match="colref">
-	<xsl:call-template name="get-column-name">
-	    <xsl:with-param name="select" select="@linkend"/>
-	</xsl:call-template>
-	<xsl:if test="not(position()=last())">
-	    <xsl:text>, </xsl:text>
-	</xsl:if>
-    </xsl:template>
-
-<!-- ################ /COLREF ################  -->
-
-
-    <xsl:template name="get-index-name">
-	<xsl:variable name="index.name">
-	    <xsl:call-template name="get-name"/>
-	</xsl:variable>
-	<xsl:variable name="table.name">
-	    <xsl:call-template name="get-name">
+    <xsl:template match="version">
+	<xsl:text>version("</xsl:text>
+	<xsl:call-template name="get-name">
 		<xsl:with-param name="select" select="parent::table"/>
-	    </xsl:call-template>
-	</xsl:variable>
-	<!-- because postgres don't like identical index names, even on table level -->
-	<xsl:value-of select="concat($table.name, '_', $index.name)"/>
+	</xsl:call-template>
+	<xsl:text>") -> </xsl:text>
+	<xsl:value-of select="text()"/>
     </xsl:template>
+
+<!-- ################ /VERSION ################  -->
 
 </xsl:stylesheet>
