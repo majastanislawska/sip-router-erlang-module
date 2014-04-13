@@ -185,7 +185,7 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 	db1_res_t *res;
 	db_row_t *rows = NULL, *row;
 	db_val_t *val;
-	char atom[MAXATOMLEN];
+	char atom[MAXATOMLEN], *p;
 	ei_term term;
 	str *sname;
 //	static str table_version=STR_STATIC_INIT("table_version");
@@ -245,8 +245,8 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 		RES_NAMES(res)[i] = sname;
 		ei_decode_atom(retbuf.buff, &(retbuf.index), atom);
 		if(strcmp("int",atom)==0) { RES_TYPES(res)[i]=DB1_INT; }
-		if(strcmp("string",atom)==0) { RES_TYPES(res)[i]=DB1_STR; }
-//		if(strcmp("string",atom)==0) { RES_TYPES(res)[i]=DB1_DOUBLE; }
+		if(strcmp("string",atom)==0) { RES_TYPES(res)[i]=DB1_STRING; }
+		if(strcmp("float",atom)==0) { RES_TYPES(res)[i]=DB1_DOUBLE; }
 //		if(strcmp("string",atom)==0) { RES_TYPES(res)[i]=DB1_BLOB; }
 		ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term);
 		ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term);
@@ -270,26 +270,26 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 	RES_ROWS(res) = rows;
 	for(i=0; i < n_rows; i++) {
 		RES_ROW_N(res)=i+1;
-		row = &RES_ROWS(res)[0];
-		if (db_allocate_row(res, row) != 0)
+		row = &RES_ROWS(res)[i];
+		if (db_allocate_row(res, row) != 0) {
+			LM_ERR("erlang_srdb1_query error in db_allocate_row %d\n",i);
 			goto error;
+		}
 		ei_decode_tuple_header(retbuf.buff, &(retbuf.index), &j);
 		if(j!=n_cols) {
 			LM_ERR("erlang_srdb1_query mismatch:values list element tuple size is %d n_cols from header was %d\n",j, n_cols);
 		}
 		for (j = 0, val = ROW_VALUES(row); j < RES_COL_N(res); j++, val++) {
-			VAL_TYPE(val) = RES_TYPES(res)[i];
+			VAL_TYPE(val) = RES_TYPES(res)[j];
 			VAL_NULL(val) = 0;
 			VAL_FREE(val) = 0;
-//<------><------><------>if (sqlite3_column_type(conn->stmt, i) == SQLITE_NULL) {
-//<------><------><------><------>VAL_NULL(val) = 1;
 //			ei_get_type(retbuf.buff, &(retbuf.index), int *type, int *size);
 			retcode=ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term);
 			if (retcode == -1) {
 				LM_ERR("erlang_srdb1_query: error decoding erlang term %d %d\n",i,j);
 				goto error;
 			}
-			if (retcode == 0) LM_DBG("erlang_srdb1_query: need decode agin\n");
+			if (retcode == 0) LM_DBG("erlang_srdb1_query: need decode agin %d %d term.ei_type=%d\n",i,j,term.ei_type);
 			switch(term.ei_type) {
 				case ERL_SMALL_INTEGER_EXT:
 				case ERL_INTEGER_EXT:
@@ -303,7 +303,18 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 				case ERL_SMALL_ATOM_EXT:
 				case ERL_ATOM_UTF8_EXT:
 				case ERL_SMALL_ATOM_UTF8_EXT:
-//					VAL_DOUBLE(val)=term.value.f_val;
+					p=pkg_malloc(term.size+1);
+					ei_decode_atom(retbuf.buff, &(retbuf.index), p);
+					LM_DBG("decoded atom %s\n",p);
+					VAL_STRING(val)=p;
+					VAL_FREE(val)=1;
+					break;
+				case ERL_STRING_EXT:
+					p=pkg_malloc(term.size+1);
+					ei_decode_string(retbuf.buff, &(retbuf.index), p);
+					LM_DBG("decoded string %s\n",p);
+					VAL_STRING(val)=p;
+					VAL_FREE(val)=1;
 					break;
 				case ERL_REFERENCE_EXT:
 				case ERL_NEW_REFERENCE_EXT:
@@ -312,7 +323,7 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 				case ERL_SMALL_TUPLE_EXT:
 				case ERL_LARGE_TUPLE_EXT:
 				case ERL_NIL_EXT:
-				case ERL_STRING_EXT:
+//				case ERL_STRING_EXT:
 				case ERL_LIST_EXT:
 				case ERL_BINARY_EXT:
 				case ERL_SMALL_BIG_EXT:
