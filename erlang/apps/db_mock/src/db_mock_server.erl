@@ -23,7 +23,9 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, {}).
+-include("../lib/schema.hrl").
+
+-record(state, {ref}).
 
 %%%===================================================================
 %%% API
@@ -55,7 +57,9 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 init([]) ->
-        {ok, #state{}}.
+        {ok,Ref}=dets:open_file("mock_db.dets",[{type,bag}]),
+        io:format("The data file's info: ~p~n", [dets:info(Ref)] ),
+        {ok, #state{ref=Ref}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -78,12 +82,38 @@ handle_call(Request={select,Table=version,Fields=[table_version],[{table_name,'=
     error_logger:info_msg("db_mock handle_call ~p >=> ~p",[Request,Reply]),
     {reply, Reply, State};
 
-% permisions1
-handle_call(Request={select,Table,Fields,[],[]}, _From, State) ->
+%
+handle_call(Request={select,Table,Fields,Keys,[]}, _From, State=#state{ref=Ref}) ->
     FT=[ X || NN <- Fields, X={N,_T,_S,_D,_C} <- schema:schema(Table), N==NN ],
-    Reply={ FT,[]},
+    FilteredData=lookup_data(Ref,Table,Keys),
+    TrimmedData=lists:map( fun(X) ->
+			FinProp=lists:map(fun(Key) -> lists:keyfind(Key, 1, X)
+			end,Fields),
+			{_Keys,FinRec}=lists:unzip(FinProp),
+			list_to_tuple(FinRec)
+		    end,FilteredData),
+    Reply={ FT,TrimmedData},
     error_logger:info_msg("db_mock handle_call ~p >=> ~p",[Request,Reply]),
-%    {reply, Reply, State};
+    {reply, Reply, State};
+
+handle_call(Request={insert,Table,Fields,Keys, Values}, _From, State=#state{ref=Ref}) ->
+    FT=[ X || NN <- Fields, X={N,_T,_S,_D,_C} <- schema:schema(Table), N==NN ],
+    Def=[Table |[ D || {_X,_T,_S,D,_C} <- schema:schema(Table)]],
+    TF=[ X || {X,_T,_S,_D,_C} <- schema:schema(Table)],
+    Data=dets:insert(Ref, etbx:to_rec({Table,Def,TF}, Values)),
+    Reply={ FT,Data},
+    error_logger:info_msg("db_mock handle_call ~p >=> ~p",[Request,Reply]),
+    {reply, Reply, State};
+
+handle_call(Request={delete,Table,Fields,Keys, Values}, _From, State=#state{ref=Ref}) ->
+    FT=[ X || NN <- Fields, X={N,_T,_S,_D,_C} <- schema:schema(Table), N==NN ],
+    FilteredData=lookup_data(Ref,Table,Keys),
+    Ret=case FilteredData of
+	[] -> no_data;
+	List -> lists:foldr(fun (X,Acc) -> {_Keys,XVal}=lists:unzip(X),dets:delete_object(Ref, list_to_tuple([Table|XVal])),Acc+1 end,0,List)
+    end,
+    Reply={ FT,Ret},
+    error_logger:info_msg("db_mock handle_call ~p >=> ~p",[Request,Reply]),
 %
 %handle_call(Request, _From, State) ->
 %    error_logger:info_msg("db_mock handle_call ~p",[Request]),
@@ -146,3 +176,21 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+lookup_data(Ref,Table,Keys) ->
+    AllFields=[ X || {X,_T,_S,_D,_C} <- schema:schema(Table)],
+    Data=lists:map( fun(X) ->
+			[_RecName|Ret]=tuple_to_list(X),
+			lists:zip(AllFields,Ret)
+		    end,dets:lookup(Ref, Table)),
+    FilteredData=lists:filter( fun(X) ->
+	Acc=lists:foldl(fun
+		({Key,'=', Val},Acc) -> Ret=lists:keyfind(Key, 1, X) == {Key,Val},case Acc of true ->Ret;false ->false end;
+		({Key,'!=',Val},Acc) -> Ret=lists:keyfind(Key, 1, X) /= {Key,Val},case Acc of true ->Ret;false ->false end;
+		({Key,'>', Val},Acc) -> Ret=lists:keyfind(Key, 1, X) >  {Key,Val},case Acc of true ->Ret;false ->false end;
+		({Key,'<', Val},Acc) -> Ret=lists:keyfind(Key, 1, X) <  {Key,Val},case Acc of true ->Ret;false ->false end;
+		({Key,'>=',Val},Acc) -> Ret=lists:keyfind(Key, 1, X) >= {Key,Val},case Acc of true ->Ret;false ->false end;
+		({Key,'<=',Val},Acc) -> Ret=lists:keyfind(Key, 1, X) =< {Key,Val},case Acc of true ->Ret;false ->false end
+	end,true,Keys),
+	Acc
+    end,Data),
+    FilteredData.
