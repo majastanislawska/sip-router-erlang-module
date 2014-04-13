@@ -136,6 +136,7 @@ static int erlang_mod_init(void)
 		child_loop(pipe_fds[0]);
 	}else{ /* parent */
 		DBG("erlang_mod_init parent: child=%d\n", con_mgr_pid);
+		sleep(2);  //FIXME, sleep for a while and let child connect
 	}
 	return 0;
 }
