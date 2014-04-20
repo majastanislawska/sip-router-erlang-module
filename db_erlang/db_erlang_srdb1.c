@@ -187,6 +187,7 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 	db_val_t *val;
 	char atom[MAXATOMLEN], *p;
 	ei_term term;
+	int ei_type,size;
 	str *sname;
 
 	if (!_h || !_r) {
@@ -287,35 +288,48 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 			VAL_TYPE(val) = RES_TYPES(res)[j];
 			VAL_NULL(val) = 0;
 			VAL_FREE(val) = 0;
-//			ei_get_type(retbuf.buff, &(retbuf.index), int *type, int *size);
-			retcode=ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term);
-			if (retcode == -1) {
-				LM_ERR("erlang_srdb1_query: error decoding erlang term %d %d\n",i,j);
+			retcode=ei_get_type_internal(retbuf.buff, &(retbuf.index), &ei_type, &size);
+			if (retcode < 0) {
+				LM_ERR("erlang_srdb1_query: error getting type for element %d %d\n",i,j);
 				goto error;
 			}
-			if (retcode == 0) LM_DBG("erlang_srdb1_query: need decode agin %d %d term.ei_type=%d\n",i,j,term.ei_type);
-			switch(term.ei_type) {
+			LM_DBG("erlang_srdb1_query: element %d %d ei_type=%d size=%d\n",i,j,ei_type, size);
+			switch(ei_type) {
 				case ERL_SMALL_INTEGER_EXT:
 				case ERL_INTEGER_EXT:
-					VAL_INT(val) = term.value.i_val;
+					retcode=ei_decode_long(retbuf.buff, &(retbuf.index), &VAL_INT(val));
+					if(retcode < 0) goto error;
+					LM_DBG("decoded interger %d\n",VAL_INT(val));
 					break;
 				case ERL_FLOAT_EXT:
 				case NEW_FLOAT_EXT:
-					VAL_DOUBLE(val)=term.value.d_val;
+					retcode=ei_decode_double(retbuf.buff, &(retbuf.index), &VAL_DOUBLE(val));
+					if(retcode < 0) goto error;
+					LM_DBG("decoded float %f\n",VAL_DOUBLE(val));
 					break;
 				case ERL_ATOM_EXT:
 				case ERL_SMALL_ATOM_EXT:
 				case ERL_ATOM_UTF8_EXT:
 				case ERL_SMALL_ATOM_UTF8_EXT:
-					p=pkg_malloc(term.size+1);
-					ei_decode_atom(retbuf.buff, &(retbuf.index), p);
-					LM_DBG("decoded atom %s\n",p);
+					p=pkg_malloc(size+1);
+					if(!p) { LM_ERR("erlang_srdb1_query: no memory\n"); goto error; }
+					retcode=ei_decode_atom(retbuf.buff, &(retbuf.index), p);
+					if(retcode < 0) {
+						pkg_free(p);
+						goto error;
+					}
+					LM_DBG("decoded small_atom_utf %s\n",p);
 					VAL_STRING(val)=p;
 					VAL_FREE(val)=1;
 					break;
 				case ERL_STRING_EXT:
-					p=pkg_malloc(term.size+1);
-					ei_decode_string(retbuf.buff, &(retbuf.index), p);
+					p=pkg_malloc(size+1);
+					if(!p) { LM_ERR("erlang_srdb1_query: no memory\n"); goto error; }
+					retcode=ei_decode_string(retbuf.buff, &(retbuf.index), p);
+					if(retcode < 0) {
+						pkg_free(p);
+						goto error;
+					}
 					LM_DBG("decoded string %s\n",p);
 					VAL_STRING(val)=p;
 					VAL_FREE(val)=1;
@@ -327,7 +341,6 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 				case ERL_SMALL_TUPLE_EXT:
 				case ERL_LARGE_TUPLE_EXT:
 				case ERL_NIL_EXT:
-//				case ERL_STRING_EXT:
 				case ERL_LIST_EXT:
 				case ERL_BINARY_EXT:
 				case ERL_SMALL_BIG_EXT:
