@@ -446,6 +446,11 @@
 	    <xsl:call-template name="get-size"/>
 	</xsl:variable>
 	<xsl:choose>
+	    <xsl:when test="contains($size,',')">
+		<xsl:text>{</xsl:text>
+		<xsl:value-of select="$size"/>
+		<xsl:text>}</xsl:text>
+	    </xsl:when>
 	    <xsl:when test="not($size='')">
 		<xsl:value-of select="$size"/>
 	    </xsl:when>
