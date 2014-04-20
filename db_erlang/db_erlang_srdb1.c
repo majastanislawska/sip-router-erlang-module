@@ -86,6 +86,8 @@ void erlang_srdb1_close(db1_con_t* _h)
 int srdb1_encode_kv(int tupsize,const db_key_t* _k, const db_op_t* _op, const db_val_t* _v,
 				const int _n, ei_x_buff *argbuf) {
 	int i;
+	struct tm* tt;
+	time_t t_t;
 
 	if(_k) {
 	    ei_x_encode_list_header(argbuf, _n);
@@ -120,15 +122,25 @@ int srdb1_encode_kv(int tupsize,const db_key_t* _k, const db_op_t* _op, const db
 			case DB1_STR:
 			    ei_x_encode_string_len(argbuf,VAL_STR(vv).s,VAL_STR(vv).len);
 			    break;
-//			case DB1_DATETIME: 
-//			    ei_x_encode_string(argbuf,);
-//			    break;
-//			case DB1_BLOB:
-//			    ei_x_encode_binary(argbuf,VAL_BLOB(vv));
-//			    break;
-//			case DB1_BITMAP:
-//			    ei_x_encode_binary(argbuf,&VAL_BITMAP(vv));
-//			    break;
+			case DB1_DATETIME:
+			    t_t=VAL_TIME(vv);
+			    tt= localtime(&t_t);
+			    ei_x_encode_tuple_header(argbuf, 2);
+			    ei_x_encode_tuple_header(argbuf, 3);
+			    ei_x_encode_long(argbuf, tt->tm_year + 1900);
+			    ei_x_encode_long(argbuf, tt->tm_mon +1);
+			    ei_x_encode_long(argbuf, tt->tm_mday);
+			    ei_x_encode_tuple_header(argbuf, 3);
+			    ei_x_encode_long(argbuf, tt->tm_hour);
+			    ei_x_encode_long(argbuf, tt->tm_min);
+			    ei_x_encode_long(argbuf, tt->tm_sec);
+			    break;
+			case DB1_BLOB:
+			    ei_x_encode_binary(argbuf,VAL_BLOB(vv).s,VAL_BLOB(vv).len);
+			    break;
+			case DB1_BITMAP:
+			    ei_x_encode_ulong(argbuf,VAL_BITMAP(vv));
+			    break;
 		    }
 		}
 	    }
@@ -249,6 +261,7 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 		if(strcmp("int",atom)==0) { RES_TYPES(res)[i]=DB1_INT; }
 		if(strcmp("string",atom)==0) { RES_TYPES(res)[i]=DB1_STRING; }
 		if(strcmp("float",atom)==0) { RES_TYPES(res)[i]=DB1_DOUBLE; }
+		if(strcmp("datetime",atom)==0) { RES_TYPES(res)[i]=DB1_DATETIME; }
 //		if(strcmp("string",atom)==0) { RES_TYPES(res)[i]=DB1_BLOB; }
 		ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term);
 		ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term);
@@ -334,12 +347,39 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 					VAL_STRING(val)=p;
 					VAL_FREE(val)=1;
 					break;
+				case ERL_SMALL_TUPLE_EXT:
+				case ERL_LARGE_TUPLE_EXT:
+					LM_DBG("got tuple)\n");
+					if (VAL_TYPE(val)==DB1_DATETIME) {
+					    struct tm tm;
+					    LM_DBG("and col type is datetime\n");
+					    retcode=ei_decode_tuple_header(retbuf.buff, &(retbuf.index), &x);
+					    if(retcode < 0) goto error;
+					    retcode=ei_decode_tuple_header(retbuf.buff, &(retbuf.index), &x);
+					    if(retcode < 0) goto error;
+					    retcode=ei_decode_long(retbuf.buff, &(retbuf.index), (long int *)&tm.tm_year);tm.tm_year -=1900;
+					    if(retcode < 0) goto error;
+					    retcode=ei_decode_long(retbuf.buff, &(retbuf.index), (long int *)&tm.tm_mon); tm.tm_mon -=1;
+					    if(retcode < 0) goto error;
+					    retcode=ei_decode_long(retbuf.buff, &(retbuf.index), (long int *)&tm.tm_mday);
+					    if(retcode < 0) goto error;
+					    retcode=ei_decode_tuple_header(retbuf.buff, &(retbuf.index), &x);
+					    if(retcode < 0) goto error;
+					    retcode=ei_decode_long(retbuf.buff, &(retbuf.index), (long int *)&tm.tm_hour);
+					    if(retcode < 0) goto error;
+					    retcode=ei_decode_long(retbuf.buff, &(retbuf.index), (long int *)&tm.tm_min);
+					    if(retcode < 0) goto error;
+					    retcode=ei_decode_long(retbuf.buff, &(retbuf.index), (long int *)&tm.tm_sec);
+					    if(retcode < 0) goto error;
+					    VAL_TIME(val)=mktime(&tm);
+					    break;
+					}
+					LM_ERR("erlang_srdb1_query: got tuple but valtype is not datetime element %d in row %d in response\n",j,i);
+					break;
 				case ERL_REFERENCE_EXT:
 				case ERL_NEW_REFERENCE_EXT:
 				case ERL_PORT_EXT:
 				case ERL_PID_EXT:
-				case ERL_SMALL_TUPLE_EXT:
-				case ERL_LARGE_TUPLE_EXT:
 				case ERL_NIL_EXT:
 				case ERL_LIST_EXT:
 				case ERL_BINARY_EXT:
