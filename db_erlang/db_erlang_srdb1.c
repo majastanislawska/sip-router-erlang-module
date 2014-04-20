@@ -180,7 +180,7 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 	     const db_val_t* _v, const db_key_t* _c, const int _n, const int _nc,
 	     const db_key_t _o, db1_res_t** _r) {
 	ei_x_buff argbuf,retbuf;
-	int retcode,i,j;
+	int retcode,i,j,x;
 	int n_cols,n_rows,len;
 	db1_res_t *res;
 	db_row_t *rows = NULL, *row;
@@ -188,11 +188,7 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 	char atom[MAXATOMLEN], *p;
 	ei_term term;
 	str *sname;
-//	static str table_version=STR_STATIC_INIT("table_version");
 
-
-	
-	LM_DBG("erlang_srdb1_query %p %p\n",_r, *_r);
 	if (!_h || !_r) {
 		LM_ERR("invalid parameter value\n");
 		return -1;
@@ -218,20 +214,25 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 	}
 	// we have a tuple there:
 	ei_decode_tuple_header(retbuf.buff, &(retbuf.index), &i);
-	i=retbuf.index;
-	ei_skip_term(retbuf.buff, &i);
-	LM_DBG("erlang_srdb1_query: position of end of field list should be %d\n",i);
+	x=retbuf.index;
+	ei_skip_term(retbuf.buff, &x);
+	LM_DBG("erlang_srdb1_query: position of end of field list should be %d\n",x);
 	//first is list of 5-element tuples containing name and type of field
 	ei_decode_list_header(retbuf.buff, &(retbuf.index), &n_cols);
 	LM_DBG("erlang_srdb1_query: length -f field_list is %d\n",n_cols);
 	res=db_new_result();
-	if (db_allocate_columns(res, n_cols) != 0)
+	if (db_allocate_columns(res, n_cols) != 0) {
+		LM_ERR("erlang_srdb1_query: db_allocate_columns failed\n");
 		goto error;
+	}
 	RES_COL_N(res) = n_cols;
 	for(i=0; i < n_cols; i++) {
+		x=retbuf.index;
+		ei_skip_term(retbuf.buff, &x);
+		LM_DBG("erlang_srdb1_query: position of end of this field should be %d\n",x);
 		ei_decode_tuple_header(retbuf.buff, &(retbuf.index), &j);
-		if( j!=5) LM_ERR("erlang_srdb1_query name&type list element tuple is not 2\n");
-		ei_decode_atom(retbuf.buff, &(retbuf.index), atom);
+		if( j!=5) LM_ERR("erlang_srdb1_query name&type list element tuple is not 5\n");
+		ei_decode_atom(retbuf.buff, &(retbuf.index), atom);  //1  name
 		len=strlen(atom);
 		sname = (str*)pkg_malloc(sizeof(str)+len+1);
 		if (!sname) {
@@ -257,27 +258,30 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 	//now rows, list of tuples
 	ei_decode_list_header(retbuf.buff, &(retbuf.index), &n_rows);
 	LM_DBG("erlang_srdb1_query values list size is %d\n",n_rows);
-	RES_NUM_ROWS(res)=n_rows;
-	if (n_rows==0) {
+	if (n_rows<=0) {
 		LM_DBG("erlang_srdb1_query no rows returned\n");
 		RES_ROWS(res) = NULL;
+		RES_NUM_ROWS(res)=0;
 		*_r=res;
 		return 0;
 	}
+	RES_NUM_ROWS(res)=n_rows;
 	rows = pkg_realloc(rows, sizeof(db_row_t) * n_rows);
-	if (rows == NULL)
+	if (rows == NULL) {
+		LM_ERR("erlang_srdb1_query: pkg_realloc rows failed\n");
 		goto error;
+	}
 	RES_ROWS(res) = rows;
 	for(i=0; i < n_rows; i++) {
 		RES_ROW_N(res)=i+1;
 		row = &RES_ROWS(res)[i];
 		if (db_allocate_row(res, row) != 0) {
-			LM_ERR("erlang_srdb1_query error in db_allocate_row %d\n",i);
+			LM_ERR("erlang_srdb1_query: db_allocate_row failed for row %d\n",i);
 			goto error;
 		}
 		ei_decode_tuple_header(retbuf.buff, &(retbuf.index), &j);
 		if(j!=n_cols) {
-			LM_ERR("erlang_srdb1_query mismatch:values list element tuple size is %d n_cols from header was %d\n",j, n_cols);
+			LM_ERR("erlang_srdb1_query: mismatch:values list element tuple size is %d n_cols from header was %d\n",j, n_cols);
 		}
 		for (j = 0, val = ROW_VALUES(row); j < RES_COL_N(res); j++, val++) {
 			VAL_TYPE(val) = RES_TYPES(res)[j];
@@ -336,15 +340,12 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 		}
 	}
 	ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term); // List tail,
-
-
-
-
 	*_r=res;
 	return 0;
 error:
 	if (res)
 		db_free_result(res);
+	LM_ERR("erlang_srdb1_query: Failed\n");
 	return -1;
 }
 
