@@ -10,6 +10,7 @@
 # Start main application
 -s echo
 -s db_mock
+-s kam_boss_db
 
 # Node name
 -sname test
