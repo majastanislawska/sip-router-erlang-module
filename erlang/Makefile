@@ -11,6 +11,10 @@ XSLTPROC_FLAGS = --xinclude
 DB_SCHEMA=apps/db_mock/src/schema.erl
 DB_SCHEMA_HRL=apps/db_mock/lib/schema.hrl
 DB_ERLANG_XSL = db_erlang_mock.xsl
+KAM_BOSS_DB_PATH=apps/kam_boss_db/src/model/
+BOSS_DB_MODELS1=$(subst $(SCHEMA_HOME)/kamailio-,$(KAM_BOSS_DB_PATH),$(KAM_TABLE_FILES))
+BOSS_DB_MODELS=$(BOSS_DB_MODELS1:.xml=.erl)
+KAM_BOSS_DB_XSL=kam_boss_db.xsl
 #all: deps dirs compile
 all: deps compile
 
@@ -44,7 +48,18 @@ $(DB_SCHEMA): db_erlang_mock.xml db_erlang_mock.xsl
 	--debug \
 	$(DB_ERLANG_XSL) db_erlang_mock.xml
 
-compile: $(REBAR) $(DB_SCHEMA)
+$(BOSS_DB_MODELS): $(KAM_BOSS_DB_XSL) $(KAM_TABLE_FILES)
+	XML_CATALOG_FILES=$(DB_CATALOG) $(XSLTPROC) $(XSLTPROC_FLAGS) \
+	--path $(SCHEMA_HOME) \
+	--stringparam dir "$(KAM_BOSS_DB_PATH)" \
+	--stringparam db "$@" \
+	--debug \
+	$(KAM_BOSS_DB_XSL) $(SCHEMA_HOME)/kamailio-$(subst $(KAM_BOSS_DB_PATH),,$(basename $@)).xml
+
+kam_boss_db.schema: $(BOSS_DB_MODELS) $(KAM_BOSS_DB_XSL)
+	touch kam_boss_db.schema
+
+compile: $(REBAR) $(DB_SCHEMA) kam_boss_db.schema
 	$(REBAR) compile
 
 clean: $(REBAR)

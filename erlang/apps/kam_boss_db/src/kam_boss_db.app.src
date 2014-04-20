@@ -1,0 +1,17 @@
+{application, kam_boss_db,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+    {modules, [
+    kam_boss_db_app,
+    kam_boss_db_sup,
+    kam_boss_db_server
+  ]},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { kam_boss_db_app, []}},
+  {env, []}
+ ]}.
