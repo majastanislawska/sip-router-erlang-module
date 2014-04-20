@@ -473,6 +473,7 @@ int erlang_srdb1_raw_query(const db1_con_t* _h, const str* _s, db1_res_t** _r)
  */
 int erlang_srdb1_insert(const db1_con_t* _h, const db_key_t* _k, const db_val_t* _v, const int _n) {
 	ei_x_buff argbuf;
+	int retcode;
 
 	LM_DBG("erlang_srdb1_insert\n");
 	if (!_h) {
@@ -490,8 +491,13 @@ int erlang_srdb1_insert(const db1_con_t* _h, const db_key_t* _k, const db_val_t*
 	ei_x_encode_list_header(&argbuf, 0); //_k
 	srdb1_encode_v(_k, _v, _n, &argbuf); //_v
 
-	erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL);
+	retcode=erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL /*&retbuf*/);
 	ei_x_free(&argbuf);
+	if (retcode<0) {
+//		if(retbuf.buff) shm_free(retbuf.buff);
+		return retcode;
+	}
+
 	return 0;
 }
 
@@ -508,6 +514,7 @@ int erlang_srdb1_insert(const db1_con_t* _h, const db_key_t* _k, const db_val_t*
 int erlang_srdb1_delete(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _o,
 		const db_val_t* _v, const int _n) {
 	ei_x_buff argbuf;
+	int retcode;
 
 	LM_DBG("erlang_srdb1_delete\n");
 	if (!_h) {
@@ -525,8 +532,12 @@ int erlang_srdb1_delete(const db1_con_t* _h, const db_key_t* _k, const db_op_t* 
 	srdb1_encode_k(_k, _o, _v, _n, &argbuf); //_k
 	ei_x_encode_list_header(&argbuf, 0); //_v
 
-	erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL);
+	retcode=erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL /*&retbuf*/);
 	ei_x_free(&argbuf);
+	if (retcode<0) {
+//		if(retbuf.buff) shm_free(retbuf.buff);
+		return retcode;
+	}
 	return 0;
 }
 
@@ -548,6 +559,7 @@ int erlang_srdb1_update(const db1_con_t* _h, const db_key_t* _k, const db_op_t* 
 	const int _un) {
 
 	ei_x_buff argbuf;
+	int retcode;
 
 	LM_DBG("erlang_srdb1_update\n");
 	if (!_h) {
@@ -565,8 +577,13 @@ int erlang_srdb1_update(const db1_con_t* _h, const db_key_t* _k, const db_op_t* 
 	srdb1_encode_k(_k, _o, _v, _n, &argbuf); //_k
 	srdb1_encode_v(_k, _v, _un, &argbuf); //_v
 
-	erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL);
+	retcode=erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL /*&retbuf*/);
 	ei_x_free(&argbuf);
+	if (retcode<0) {
+//		if(retbuf.buff) shm_free(retbuf.buff);
+		return retcode;
+	}
+
 	return 0;
 }
 
@@ -583,6 +600,7 @@ int erlang_srdb1_replace(const db1_con_t* _h, const db_key_t* _k,
 		const db_val_t* _v, const int _n, const int _m) {
 
 	ei_x_buff argbuf;
+	int retcode;
 
 	LM_DBG("erlang_srdb1_replace\n");
 	if (!_h) {
@@ -597,12 +615,16 @@ int erlang_srdb1_replace(const db1_con_t* _h, const db_key_t* _k,
 	ei_x_encode_atom_len(&argbuf,CON_TABLE(_h)->s,CON_TABLE(_h)->len);
 
 	ei_x_encode_list_header(&argbuf, 0); //_c
-	ei_x_encode_list_header(&argbuf, 0); //_k
-//	srdb1_encode_k(_k, NULL, _v, _n, &argbuf); //_k
+//	ei_x_encode_list_header(&argbuf, 0); //_k
+	srdb1_encode_k(_k, NULL, _v, _n, &argbuf); //_k
 	srdb1_encode_v(_k, _v, _n, &argbuf); //_v
 
-	erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL);
+	retcode=erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL /*&retbuf*/);
 	ei_x_free(&argbuf);
+	if (retcode<0) {
+//		if(retbuf.buff) shm_free(retbuf.buff);
+		return retcode;
+	}
 	return 0;
 }
 
@@ -654,14 +676,31 @@ int erlang_srdb1_affected_rows(const db1_con_t* _h)
  int erlang_srdb1_insert_update(const db1_con_t* _h, const db_key_t* _k, const db_val_t* _v,
 	const int _n)
  {
-//	int off, ret;
-//	static str  sql_str;
- 
+	ei_x_buff argbuf;
+	int retcode;
+
 	if ((!_h) || (!_k) || (!_v) || (!_n)) {
 		LM_ERR("invalid parameter value\n");
 		return -1;
 	}
-	LM_DBG("erlang_srdb1_insert_update\n");
+	LM_DBG("erlang_srdb1_insert_update table %.*s\n",CON_TABLE(_h)->len, CON_TABLE(_h)->s);
+	ei_x_new(&argbuf);
+	//encode tuple {db_op, table, [cols], [keys], [vals]}
+	ei_x_encode_tuple_header(&argbuf, 5);
+	ei_x_encode_atom(&argbuf,"insert_update");
+	ei_x_encode_atom_len(&argbuf,CON_TABLE(_h)->s,CON_TABLE(_h)->len);
+
+	ei_x_encode_list_header(&argbuf, 0); //_c
+//	ei_x_encode_list_header(&argbuf, 0); //_k
+	srdb1_encode_k(_k, NULL, _v, _n, &argbuf); //_k
+	srdb1_encode_v(_k, _v, _n, &argbuf); //_v
+
+	retcode=erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL /*&retbuf*/);
+	ei_x_free(&argbuf);
+	if (retcode<0) {
+//		if(retbuf.buff) shm_free(retbuf.buff);
+		return retcode;
+	}
 	return 0;
 }
 

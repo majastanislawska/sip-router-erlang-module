@@ -133,16 +133,16 @@ int db_erlang_bind_db_api(db_func_t *dbb)
 	dbb->init             = erlang_srdb1_init;
 	dbb->close            = erlang_srdb1_close;
 	dbb->query            = erlang_srdb1_query;
-	dbb->fetch_result     = erlang_srdb1_fetch_result;
-	dbb->raw_query        = erlang_srdb1_raw_query;
+	dbb->fetch_result     = NULL; //erlang_srdb1_fetch_result;
+	dbb->raw_query        = NULL; //erlang_srdb1_raw_query;
 	dbb->free_result      = erlang_srdb1_free_result;
 	dbb->insert           = erlang_srdb1_insert;
 	dbb->delete           = erlang_srdb1_delete;
 	dbb->update           = erlang_srdb1_update;
 	dbb->replace          = erlang_srdb1_replace;
-	dbb->last_inserted_id = erlang_srdb1_last_inserted_id;
+	dbb->last_inserted_id = NULL; //erlang_srdb1_last_inserted_id;
 	dbb->insert_update    = erlang_srdb1_insert_update;
-	dbb->insert_delayed   = erlang_srdb1_insert_delayed;
-	dbb->affected_rows    = erlang_srdb1_affected_rows;
+	dbb->insert_delayed   = NULL; //erlang_srdb1_insert_delayed;
+	dbb->affected_rows    = NULL; //erlang_srdb1_affected_rows;
 	return 0;
 }
