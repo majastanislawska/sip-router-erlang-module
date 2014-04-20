@@ -257,15 +257,17 @@ int erlang_srdb1_query(const db1_con_t* _h, const db_key_t* _k, const db_op_t* _
 		memcpy(sname->s, atom, len);
 		sname->s[len] = '\0';
 		RES_NAMES(res)[i] = sname;
-		ei_decode_atom(retbuf.buff, &(retbuf.index), atom);
+		LM_DBG("decoded header %d, fieled 1: %s\n",i,atom);
+		ei_decode_atom(retbuf.buff, &(retbuf.index), atom); //2 type atom
 		if(strcmp("int",atom)==0) { RES_TYPES(res)[i]=DB1_INT; }
 		if(strcmp("string",atom)==0) { RES_TYPES(res)[i]=DB1_STRING; }
 		if(strcmp("float",atom)==0) { RES_TYPES(res)[i]=DB1_DOUBLE; }
 		if(strcmp("datetime",atom)==0) { RES_TYPES(res)[i]=DB1_DATETIME; }
 //		if(strcmp("string",atom)==0) { RES_TYPES(res)[i]=DB1_BLOB; }
-		ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term);
-		ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term);
-		ei_decode_atom(retbuf.buff, &(retbuf.index), atom);
+		ei_skip_term(retbuf.buff, &(retbuf.index));  //3 size (ignored)
+		ei_skip_term(retbuf.buff, &(retbuf.index));  //4 default value (ignored)
+		ei_skip_term(retbuf.buff, &(retbuf.index));  //3 null status (ignored)
+		LM_DBG("end of %d record: %d\n",i,retbuf.index);
 	}
 	ei_decode_ei_term(retbuf.buff, &(retbuf.index), &term); // List tail,
 	LM_DBG("erlang_srdb1_query: position after scanning is %d\n",retbuf.index);
