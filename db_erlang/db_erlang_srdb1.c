@@ -631,7 +631,7 @@ int erlang_srdb1_update(const db1_con_t* _h, const db_key_t* _k, const db_op_t* 
 
 	ei_x_encode_list_header(&argbuf, 0); //_c
 	srdb1_encode_k(_k, _o, _v, _n, &argbuf); //_k
-	srdb1_encode_v(_k, _v, _un, &argbuf); //_v
+	srdb1_encode_v(_uk, _uv, _un, &argbuf); //_v
 
 	retcode=erl_bind.do_erlang_call(&(CON_ERLANG(_h)->con),&(CON_ERLANG(_h)->regname), &argbuf, NULL /*&retbuf*/);
 	ei_x_free(&argbuf);

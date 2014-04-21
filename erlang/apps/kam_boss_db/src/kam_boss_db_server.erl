@@ -100,6 +100,13 @@ handle_call(Request={delete,Table,Fields,Keys, Values}, _From, State) ->
 		    end,boss_db:find(Table, translate_keys(Keys))),
     Reply={ FT,Data},
     error_logger:info_msg("db_mock handle_call ~p >=> ~p",[Request,Reply]),
+    {reply, Reply, State};
+handle_call(Request={update,Table,Fields,Keys, Values}, _From, State) ->
+    FT=[ X || NN <- Fields, X={N,_T,_S,_D,_C} <- schema:schema(Table), N==NN ],
+    Data=lists:map( fun(X) -> X1=X:set(translate_fields(Values)),X1:save(),X1:attributes()
+		    end,boss_db:find(Table, translate_keys(Keys))),
+    Reply={ FT,Data},
+    error_logger:info_msg("db_mock handle_call ~p >=> ~p",[Request,Reply]),
 %
 %handle_call(Request, _From, State) ->
 %    error_logger:info_msg("db_mock handle_call ~p",[Request]),
@@ -164,6 +171,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 translate_field(instance) -> instanc;
 translate_field(instanc) -> instance;
+translate_field({Field,Value}) -> {translate_field(Field),Value};
 translate_field(Field) -> Field.
 
 translate_fields([]) -> [];
