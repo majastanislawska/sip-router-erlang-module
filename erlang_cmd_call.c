@@ -84,7 +84,11 @@ int cmd_erlang_call(struct sip_msg* msg, char *cn, char *rp, char *ar, char *_re
 	}
 	retcode=do_erlang_call(&conname, &regproc, &argbuf, &retbuf);
 	if(retcode==1)  {
+		int offset=retbuf.index;
 		fill_retpv(ret_pv,&retbuf,&(retbuf.index));
+		lastterm.index=0;
+		ei_x_append_buf(&lastterm, retbuf.buff+offset,retbuf.index-offset);
+		lastterm.index=0;
 		LM_DBG("cmd_erlang_call successful\n");
 	} else {
 		LM_ERR("cmd_erlang_call failed %d\n", retcode);

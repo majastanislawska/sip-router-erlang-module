@@ -41,7 +41,7 @@ int cmd_erlang_call_route(struct sip_msg* msg, char *cn , char *rp, char *ar, ch
 	pv_spec_t * ret_pv;
 	str conname, regproc;
 	struct run_act_ctx ra_ctx;
-	int route_no;
+	int route_no,offset;
 	int retcode = -1;
 
 	if(msg==NULL) {
@@ -97,8 +97,12 @@ int cmd_erlang_call_route(struct sip_msg* msg, char *cn , char *rp, char *ar, ch
 	//first element should be atom we can add check here
 	ei_get_type(retbuf.buff, &(retbuf.index), &i, &j);
 	ei_decode_atom(retbuf.buff, &(retbuf.index), routename);
-	//second element is put to ret_pv wihout bothering what is it
+	//second element is put to ret_pv and to lastterm wihout bothering what is it
+	offset=retbuf.index;
 	fill_retpv(ret_pv,&retbuf,&(retbuf.index));
+	lastterm.index=0;
+	ei_x_append_buf(&lastterm, retbuf.buff+offset,retbuf.index-offset);
+	lastterm.index=0;
 
 	//execute route
 	route_no=route_get(&main_rt, routename);

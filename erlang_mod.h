@@ -24,5 +24,7 @@ extern struct globals_t *globals;
 extern struct erlang_counters_h erlang_cnts_h;
 extern int pipe_fds[2];
 extern int call_route_exit;
+extern ei_x_buff lastterm;
+
 /** @} */
 #endif /* _ERLANG_MOD_H */

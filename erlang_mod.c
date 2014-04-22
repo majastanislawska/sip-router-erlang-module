@@ -5,6 +5,7 @@
 
 #include "erlang_mod.h"
 #include "erlang_cmd.h"
+#include "erlang_select.h"
 #include "erlang_listener.h"
 #include "api.h"
 
@@ -19,6 +20,9 @@ static int fd_no=0; /* number of fd used */
 int call_route_exit=1;
 
 int pipe_fds[2] = {-1,-1};
+
+/* gen_call will copy here term buffer returned from erlang. this is used in select framework */
+ei_x_buff lastterm;
 
 struct erlang_counters_h erlang_cnts_h;
 counter_def_t erlang_cnt_defs[] =  {
@@ -82,6 +86,22 @@ struct module_exports exports = {
 	0,               /* oncancel function */
 	erlang_child_init  /* per-child init function */
 };
+static select_row_t sel_declaration[] = {
+	{ NULL, SEL_PARAM_STR, STR_STATIC_INIT("erlang"), sel_erl, 0},
+	{ sel_erl, SEL_PARAM_STR, STR_STATIC_INIT("print"), sel_erl_print, 0},
+	{ sel_erl, SEL_PARAM_STR, STR_STATIC_INIT("value"), sel_erl_value, 0},
+	{ sel_erl, SEL_PARAM_STR, STR_STATIC_INIT("type"), sel_erl_get_type, 0},
+//	{ sel_erl, SEL_PARAM_STR, STR_STATIC_INIT("size"), sel_erl_get_size, 0},
+//	{ sel_erl, SEL_PARAM_STR, STR_STATIC_INIT("int"), sel_erl_get_int, 0},
+//	{ sel_erl, SEL_PARAM_STR, STR_STATIC_INIT("string"), sel_erl_get_string, 0},
+//	{ sel_erl, SEL_PARAM_STR, STR_STATIC_INIT("float"), sel_erl_get_float, 0},
+	{ sel_erl, SEL_PARAM_STR, STR_STATIC_INIT("list"), sel_erl, CONSUME_NEXT_INT  },
+	{ sel_erl, SEL_PARAM_STR, STR_STATIC_INIT("tuple"), sel_erl, CONSUME_NEXT_INT  },
+//	{ sel_erl, SEL_PARAM_STR, STR_STATIC_INIT("proplist"), sel_erl, CONSUME_NEXT_STR },
+
+	{ NULL, SEL_PARAM_INT, STR_NULL, NULL, 0}
+};
+
 
 int con_mgr_pid=0;
 
@@ -138,6 +158,7 @@ static int erlang_mod_init(void)
 		DBG("erlang_mod_init parent: child=%d\n", con_mgr_pid);
 		sleep(2);  //FIXME, sleep for a while and let child connect
 	}
+	register_select_table(sel_declaration);
 	return 0;
 }
 static int erlang_child_init(int rank)
@@ -158,6 +179,7 @@ static int erlang_child_init(int rank)
 		return 0;
 	}
 	LM_DBG("erlang_child_init: called for other\n");
+	ei_x_new(&lastterm); /* that way lastterm buffer is reallocaded when needed inside ei_* calls*/
 
 	return 0;
 }
