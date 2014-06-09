@@ -16,7 +16,7 @@ Dependencies
 Modules
 -------
 
-#### erlang ####. 
+#### erlang ####
 This module does all communication with erlang VM, (epmd actually) it forks a separate process
 which collects requests from worker process, and dispatch replies to them. This is done using shared memory
 and locking (worker proces - the one which is handling sip message, builds a message struct in shared memory
@@ -65,11 +65,17 @@ sipsak -v -s sip:whatever@localhost
 Sample erlang application is just simple echoing gen_server.
 Logs on console and in log files are done by `lager`,
 
+Install
+-------
+
+To copile and install create symlinks in Your kamailio/sip-router modules directory named 'erlang' pointing to topdir of this repo  and 'db_erlang' pointing to db_erlang subdir. You also need to enable those modules in kamailio Makefile config.
+Contents of erlang dir you can put wherever You like but KAMAILIO_HOME variable in erlang/Makefile must be changed to point topdir of kamailio source tree.
+
 TODO
 ----
 On my to to list there are:
-* xsl file to produce model files for boss_db (http://github.com/ChicagoBoss/boss_db)
-* some sample database app in erlang using boss_db as middleware for backends in mnesia, riak, mysql postgres and, hopefully soon,couchdb
+* xsl file to produce model files for boss_db (http://github.com/ChicagoBoss/boss_db). Done.
+* some sample database app in erlang using boss_db as middleware for backends in mnesia, riak, mysql postgres and, hopefully soon,couchdb. Done.
 * some more inteligent startup procedure (currently sleep in main proces is used to ensure erlang process is up and running)
 * srdb2 support - needed to general compliance of db_erlang module, afaik, only one module uses this currently.
 * better failure handling, like disconnects, reconnection to erlang.
